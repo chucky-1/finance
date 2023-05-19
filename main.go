@@ -54,7 +54,7 @@ func main() {
 
 	myValidator := validator.New()
 
-	authRepository := repository.NewAuthPostgres(conn)
+	authRepository := repository.NewUserPostgres(conn)
 	chatsRepository := repository.NewChatsLocalStorage()
 	authService := service.NewAuth(authRepository, cfg.AuthSalt)
 	chatsService := service.NewChats(chatsRepository)

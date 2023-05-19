@@ -49,6 +49,8 @@ func NewBot(bot *tgbotapi.BotAPI, updatesChan tgbotapi.UpdatesChannel, validator
 var (
 	waitRegisterMessageWithUsername int
 	waitRegisterMessageWithPassword int
+	waitLoginMessageWithUsername    int
+	waitLoginMessageWithPassword    int
 	username                        string
 	password                        string
 )
@@ -64,11 +66,11 @@ func (b *Bot) Consume(ctx context.Context) {
 
 		case update := <-b.updatesChan:
 			if update.Message.MessageID == waitRegisterMessageWithUsername {
-				if err := b.handleUsername(update.Message); err != nil {
+				if err := b.handleUsername(register, update.Message); err != nil {
 					logrus.Errorf("register error: %v", err)
 					continue
 				}
-				if err := b.requestForPassword(update.Message, "Enter your password"); err != nil {
+				if err := b.requestForPassword(register, update.Message, "Enter your password"); err != nil {
 					logrus.Errorf("register error: %v", err)
 					continue
 				}
@@ -76,7 +78,7 @@ func (b *Bot) Consume(ctx context.Context) {
 			}
 
 			if update.Message.MessageID == waitRegisterMessageWithPassword {
-				if err := b.handlePassword(update.Message); err != nil {
+				if err := b.handlePassword(register, update.Message); err != nil {
 					logrus.Errorf("register error: %v", err)
 					continue
 				}
@@ -100,13 +102,65 @@ func (b *Bot) Consume(ctx context.Context) {
 				}
 				cancel()
 
-				if err := b.sendRegistrationStatus(update.Message); err != nil {
+				if err := b.sendMessage(update.Message, fmt.Sprintf("Thank you, %s! You have successfully registered", username)); err != nil {
 					logrus.Errorf("register error: %v", err)
 					continue
 				}
 
 				logrus.Infof("user %s successful registered", username)
 				continue
+			}
+
+			if update.Message.MessageID == waitLoginMessageWithUsername {
+				if err := b.handleUsername(login, update.Message); err != nil {
+					logrus.Errorf("login error: %v", err)
+					continue
+				}
+				if err := b.requestForPassword(login, update.Message, "Enter your password"); err != nil {
+					logrus.Errorf("login error: %v", err)
+					continue
+				}
+			}
+
+			if update.Message.MessageID == waitLoginMessageWithPassword {
+				if err := b.handlePassword(login, update.Message); err != nil {
+					logrus.Errorf("login error: %v", err)
+					continue
+				}
+
+				newCtx, cancel := context.WithCancel(ctx)
+				ok, err := b.auth.Login(newCtx, &model.User{
+					Username: username,
+					Password: password,
+				})
+				if err != nil {
+					logrus.Errorf("login error: %v", err)
+					cancel()
+					continue
+				}
+				cancel()
+				if !ok {
+					logrus.Infof("user %s inputted invalid password", username)
+					if err = b.requestForPassword(login, update.Message, "%s, you inputted invalid password. Try again!"); err != nil {
+						logrus.Errorf("login error: %v", err)
+						continue
+					}
+				}
+
+				newCtx, cancel = context.WithCancel(ctx)
+				if err = b.chats.Add(newCtx, update.Message.Chat.ID, username); err != nil {
+					logrus.Errorf("login error: %v", err)
+					cancel()
+					continue
+				}
+				cancel()
+
+				if err = b.sendMessage(update.Message, "%s, you are authorized!"); err != nil {
+					logrus.Errorf("login error: %v", err)
+					continue
+				}
+
+				logrus.Infof("user %s is authorized", username)
 			}
 
 			if update.Message.IsCommand() {
@@ -117,13 +171,17 @@ func (b *Bot) Consume(ctx context.Context) {
 				case register:
 					logrus.Info("register command started executing")
 					registerText := fmt.Sprintf("Enter your username. Minimum %d, maximum %d characters", usernameMinLength, usernameMaxLength)
-					if err := b.requestForUsername(update.Message, registerText); err != nil {
+					if err := b.requestForUsername(register, update.Message, registerText); err != nil {
 						logrus.Errorf("register error: %v", err)
 						continue
 					}
 					continue
 				case login:
 					logrus.Info("login command started executing")
+					loginText := fmt.Sprintf("Enter your username")
+					if err := b.requestForUsername(login, update.Message, loginText); err != nil {
+						logrus.Errorf("login error: %v", err)
+					}
 					continue
 				default:
 					logrus.Info("unknown command: %s", update.Message.Text)
@@ -136,10 +194,10 @@ func (b *Bot) Consume(ctx context.Context) {
 	}
 }
 
-func (b *Bot) handleUsername(message *tgbotapi.Message) error {
+func (b *Bot) handleUsername(action string, message *tgbotapi.Message) error {
 	username = message.Text
 	if !b.validate(username, fmt.Sprintf("min=%d,max=%d", usernameMinLength, usernameMaxLength)) {
-		err := b.requestForUsername(message, "You entered the wrong username. Try again!")
+		err := b.requestForUsername(action, message, "You entered the wrong username. Try again!")
 		if err != nil {
 			return err
 		}
@@ -149,10 +207,10 @@ func (b *Bot) handleUsername(message *tgbotapi.Message) error {
 	return nil
 }
 
-func (b *Bot) handlePassword(message *tgbotapi.Message) error {
+func (b *Bot) handlePassword(action string, message *tgbotapi.Message) error {
 	password = message.Text
 	if !b.validate(password, fmt.Sprintf("max=%d", passwordMaxLength)) {
-		err := b.requestForPassword(message, fmt.Sprintf("%s, you entered the wrong password. Try again!", username))
+		err := b.requestForPassword(action, message, fmt.Sprintf("%s, you entered the wrong password. Try again!", username))
 		if err != nil {
 			return err
 		}
@@ -162,11 +220,16 @@ func (b *Bot) handlePassword(message *tgbotapi.Message) error {
 	return nil
 }
 
-func (b *Bot) requestForUsername(message *tgbotapi.Message, text string) error {
+func (b *Bot) requestForUsername(action string, message *tgbotapi.Message, text string) error {
 	msg := tgbotapi.NewMessage(message.Chat.ID, text)
 	msg.ReplyToMessageID = message.MessageID
 
-	waitRegisterMessageWithUsername = msg.ReplyToMessageID + 2
+	switch action {
+	case register:
+		waitRegisterMessageWithUsername = msg.ReplyToMessageID + 2
+	case login:
+		waitLoginMessageWithUsername = msg.ReplyToMessageID + 2
+	}
 
 	_, err := b.bot.Send(msg)
 	if err != nil {
@@ -175,11 +238,16 @@ func (b *Bot) requestForUsername(message *tgbotapi.Message, text string) error {
 	return nil
 }
 
-func (b *Bot) requestForPassword(message *tgbotapi.Message, text string) error {
+func (b *Bot) requestForPassword(action string, message *tgbotapi.Message, text string) error {
 	msg := tgbotapi.NewMessage(message.Chat.ID, text)
 	msg.ReplyToMessageID = message.MessageID
 
-	waitRegisterMessageWithPassword = msg.ReplyToMessageID + 2
+	switch action {
+	case register:
+		waitRegisterMessageWithPassword = msg.ReplyToMessageID + 2
+	case login:
+		waitLoginMessageWithPassword = msg.ReplyToMessageID + 2
+	}
 
 	_, err := b.bot.Send(msg)
 	if err != nil {
@@ -188,13 +256,13 @@ func (b *Bot) requestForPassword(message *tgbotapi.Message, text string) error {
 	return nil
 }
 
-func (b *Bot) sendRegistrationStatus(message *tgbotapi.Message) error {
-	msg := tgbotapi.NewMessage(message.Chat.ID, fmt.Sprintf("Thank you, %s! You have successfully registered", username))
+func (b *Bot) sendMessage(message *tgbotapi.Message, text string) error {
+	msg := tgbotapi.NewMessage(message.Chat.ID, text)
 	msg.ReplyToMessageID = message.MessageID
 
 	_, err := b.bot.Send(msg)
 	if err != nil {
-		return fmt.Errorf("sendRegistrationStatus, telegram bot couldn't send message: %v", err)
+		return fmt.Errorf("sendMessage, telegram bot couldn't send message: %v", err)
 	}
 	return nil
 }

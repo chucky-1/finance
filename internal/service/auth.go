@@ -10,14 +10,15 @@ import (
 
 type Authorization interface {
 	CreateUser(ctx context.Context, user *model.User) error
+	Login(ctx context.Context, user *model.User) (bool, error)
 }
 
 type Auth struct {
-	repo repository.Authorization
+	repo repository.User
 	salt string
 }
 
-func NewAuth(repo repository.Authorization, salt string) *Auth {
+func NewAuth(repo repository.User, salt string) *Auth {
 	return &Auth{
 		repo: repo,
 		salt: salt,
@@ -26,7 +27,19 @@ func NewAuth(repo repository.Authorization, salt string) *Auth {
 
 func (a *Auth) CreateUser(ctx context.Context, user *model.User) error {
 	user.Password = a.generatePassword(user.Password)
-	return a.repo.CreateUser(ctx, user)
+	return a.repo.Create(ctx, user)
+}
+
+func (a *Auth) Login(ctx context.Context, user *model.User) (bool, error) {
+	repUser, err := a.repo.Get(ctx, user.Username)
+	if err != nil {
+		return false, err
+	}
+	user.Password = a.generatePassword(user.Password)
+	if user.Password != repUser.Password {
+		return false, nil
+	}
+	return true, nil
 }
 
 func (a *Auth) generatePassword(password string) string {

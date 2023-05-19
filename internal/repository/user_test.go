@@ -17,7 +17,7 @@ import (
 
 var (
 	dbPool   *pgxpool.Pool
-	authRepo *AuthPostgres
+	authRepo *UserPostgres
 )
 
 func TestMain(m *testing.M) {
@@ -50,7 +50,7 @@ func TestMain(m *testing.M) {
 		logrus.Fatalf("Could not connect to database: %s", err)
 	}
 
-	authRepo = NewAuthPostgres(dbPool)
+	authRepo = NewUserPostgres(dbPool)
 
 	cmd := exec.Command("flyway",
 		"-user=postgres",
@@ -78,7 +78,7 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-func TestAuth_CreateUser(t *testing.T) {
+func TestUserPostgres_CreateGet(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	defer func() {
@@ -92,17 +92,13 @@ func TestAuth_CreateUser(t *testing.T) {
 		Username: "user",
 		Password: "secret",
 	}
-	err := authRepo.CreateUser(ctx, &user)
+	err := authRepo.Create(ctx, &user)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	var u model.User
-	err = dbPool.QueryRow(ctx, `SELECT username, password FROM finance.users WHERE username='user'`).Scan(&u.Username, &u.Password)
-	if err != nil {
-		t.Fatal(err)
-	}
+	u, err := authRepo.Get(ctx, user.Username)
 
 	logrus.Infof("recieved user: %v", u)
-	require.Equal(t, user, u)
+	require.Equal(t, &user, u)
 }
