@@ -2,23 +2,22 @@ package main
 
 import (
 	"context"
-	"fmt"
-	"github.com/chucky-1/finance/internal/repository"
-	"github.com/chucky-1/finance/internal/service"
-	"github.com/go-playground/validator/v10"
-	"github.com/jackc/pgx/v4/pgxpool"
-	"github.com/joho/godotenv"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
 	"github.com/caarlos0/env/v8"
-	"github.com/chucky-1/finance/internal/consumer"
+	"github.com/go-playground/validator/v10"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	"github.com/jackc/pgx/v4/pgxpool"
+	"github.com/joho/godotenv"
 	"github.com/sirupsen/logrus"
 
 	"github.com/chucky-1/finance/internal/config"
+	"github.com/chucky-1/finance/internal/consumer"
+	"github.com/chucky-1/finance/internal/repository"
+	"github.com/chucky-1/finance/internal/service"
 )
 
 func main() {
@@ -33,7 +32,7 @@ func main() {
 
 	cfg := config.Config{}
 	if err := env.Parse(&cfg); err != nil {
-		fmt.Printf("%+v\n", err)
+		logrus.Fatalf("%+v\n", err)
 	}
 
 	conn, err := pgxpool.Connect(ctx, cfg.PostgresEndpoint)
@@ -44,13 +43,13 @@ func main() {
 		logrus.Fatalf("couldn't ping database: %v", err)
 	}
 
-	bot, err := tgbotapi.NewBotAPI(os.Getenv("TG_TOKEN"))
+	bot, err := tgbotapi.NewBotAPI(cfg.TgToken)
 	if err != nil {
 		logrus.Fatal(err)
 	}
 	//bot.Debug = true
 	u := tgbotapi.NewUpdate(0)
-	u.Timeout = cfg.Telegram.Timeout
+	u.Timeout = cfg.TgTimeout
 	updatesChan := bot.GetUpdatesChan(u)
 
 	myValidator := validator.New()
@@ -59,7 +58,9 @@ func main() {
 	authService := service.NewAuth(authRepository, cfg.AuthSalt)
 
 	tgBot := consumer.NewBot(bot, updatesChan, myValidator, authService)
-	tgBot.Consume(ctx)
+	go tgBot.Consume(ctx)
+
+	logrus.Infof("app has started")
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGTERM, os.Interrupt)
