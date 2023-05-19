@@ -17,7 +17,7 @@ import (
 
 var (
 	dbPool   *pgxpool.Pool
-	authRepo *Auth
+	authRepo *AuthPostgres
 )
 
 func TestMain(m *testing.M) {
@@ -50,7 +50,7 @@ func TestMain(m *testing.M) {
 		logrus.Fatalf("Could not connect to database: %s", err)
 	}
 
-	authRepo = NewAuth(dbPool)
+	authRepo = NewAuthPostgres(dbPool)
 
 	cmd := exec.Command("flyway",
 		"-user=postgres",

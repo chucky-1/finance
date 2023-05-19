@@ -13,17 +13,17 @@ type Authorization interface {
 	CreateUser(ctx context.Context, user *model.User) error
 }
 
-type Auth struct {
+type AuthPostgres struct {
 	conn *pgxpool.Pool
 }
 
-func NewAuth(conn *pgxpool.Pool) *Auth {
-	return &Auth{
+func NewAuthPostgres(conn *pgxpool.Pool) *AuthPostgres {
+	return &AuthPostgres{
 		conn: conn,
 	}
 }
 
-func (a *Auth) CreateUser(ctx context.Context, user *model.User) error {
+func (a *AuthPostgres) CreateUser(ctx context.Context, user *model.User) error {
 	query := `INSERT INTO finance.users (username, password) VALUES ($1, $2)`
 	_, err := a.conn.Exec(ctx, query, user.Username, user.Password)
 	if err != nil {

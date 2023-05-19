@@ -31,14 +31,17 @@ type Bot struct {
 	updatesChan tgbotapi.UpdatesChannel
 	validator   *validator.Validate
 	auth        service.Authorization
+	chats       service.Chats
 }
 
-func NewBot(bot *tgbotapi.BotAPI, updatesChan tgbotapi.UpdatesChannel, validator *validator.Validate, auth service.Authorization) *Bot {
+func NewBot(bot *tgbotapi.BotAPI, updatesChan tgbotapi.UpdatesChannel, validator *validator.Validate, auth service.Authorization,
+	chats service.Chats) *Bot {
 	return &Bot{
 		bot:         bot,
 		updatesChan: updatesChan,
 		validator:   validator,
 		auth:        auth,
+		chats:       chats,
 	}
 }
 
@@ -77,10 +80,6 @@ func (b *Bot) Consume(ctx context.Context) {
 					logrus.Errorf("register error: %v", err)
 					continue
 				}
-				if err := b.sendRegistrationStatus(update.Message); err != nil {
-					logrus.Errorf("register error: %v", err)
-					continue
-				}
 
 				newCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 				if err := b.auth.CreateUser(newCtx, &model.User{
@@ -91,8 +90,22 @@ func (b *Bot) Consume(ctx context.Context) {
 					cancel()
 					continue
 				}
-				logrus.Infof("user %s successful registered", username)
 				cancel()
+
+				newCtx, cancel = context.WithTimeout(ctx, 10*time.Second)
+				if err := b.chats.Add(newCtx, update.Message.Chat.ID, username); err != nil {
+					logrus.Errorf("register error: %v", err)
+					cancel()
+					continue
+				}
+				cancel()
+
+				if err := b.sendRegistrationStatus(update.Message); err != nil {
+					logrus.Errorf("register error: %v", err)
+					continue
+				}
+
+				logrus.Infof("user %s successful registered", username)
 				continue
 			}
 
