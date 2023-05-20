@@ -35,6 +35,9 @@ func (a *Auth) Login(ctx context.Context, user *model.User) (bool, error) {
 	if err != nil {
 		return false, err
 	}
+	if repUser == nil {
+		return false, nil
+	}
 	user.Password = a.generatePassword(user.Password)
 	if user.Password != repUser.Password {
 		return false, nil

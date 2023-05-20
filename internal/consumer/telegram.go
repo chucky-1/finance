@@ -120,6 +120,7 @@ func (b *Bot) Consume(ctx context.Context) {
 					logrus.Errorf("login error: %v", err)
 					continue
 				}
+				continue
 			}
 
 			if update.Message.MessageID == waitLoginMessageWithPassword {
@@ -128,7 +129,7 @@ func (b *Bot) Consume(ctx context.Context) {
 					continue
 				}
 
-				newCtx, cancel := context.WithCancel(ctx)
+				newCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 				ok, err := b.auth.Login(newCtx, &model.User{
 					Username: username,
 					Password: password,
@@ -140,14 +141,15 @@ func (b *Bot) Consume(ctx context.Context) {
 				}
 				cancel()
 				if !ok {
-					logrus.Infof("user %s inputted invalid password", username)
-					if err = b.requestForPassword(login, update.Message, "%s, you inputted invalid password. Try again!"); err != nil {
+					logrus.Errorf("login error: invalid username: %s or password: %s", username, password)
+					if err = b.requestForUsername(login, update.Message, "You inputted invalid username or password. Try again! Enter your username"); err != nil {
 						logrus.Errorf("login error: %v", err)
 						continue
 					}
+					continue
 				}
 
-				newCtx, cancel = context.WithCancel(ctx)
+				newCtx, cancel = context.WithTimeout(ctx, 10*time.Second)
 				if err = b.chats.Add(newCtx, update.Message.Chat.ID, username); err != nil {
 					logrus.Errorf("login error: %v", err)
 					cancel()
@@ -155,12 +157,13 @@ func (b *Bot) Consume(ctx context.Context) {
 				}
 				cancel()
 
-				if err = b.sendMessage(update.Message, "%s, you are authorized!"); err != nil {
+				if err = b.sendMessage(update.Message, fmt.Sprintf("%s, you are authorized!", username)); err != nil {
 					logrus.Errorf("login error: %v", err)
 					continue
 				}
 
 				logrus.Infof("user %s is authorized", username)
+				continue
 			}
 
 			if update.Message.IsCommand() {
@@ -169,6 +172,7 @@ func (b *Bot) Consume(ctx context.Context) {
 					logrus.Info("start command executed")
 					continue
 				case register:
+					// TODO проверка если пользователь уже в системе
 					logrus.Info("register command started executing")
 					registerText := fmt.Sprintf("Enter your username. Minimum %d, maximum %d characters", usernameMinLength, usernameMaxLength)
 					if err := b.requestForUsername(register, update.Message, registerText); err != nil {
@@ -178,9 +182,28 @@ func (b *Bot) Consume(ctx context.Context) {
 					continue
 				case login:
 					logrus.Info("login command started executing")
-					loginText := fmt.Sprintf("Enter your username")
-					if err := b.requestForUsername(login, update.Message, loginText); err != nil {
+					newCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+					name, err := b.chats.Get(newCtx, update.Message.Chat.ID)
+					if err != nil {
 						logrus.Errorf("login error: %v", err)
+						cancel()
+						continue
+					}
+					cancel()
+
+					if name != "" {
+						logrus.Errorf("user %s already is authorized", name)
+						if err = b.sendMessage(update.Message, fmt.Sprintf("%s, you are already authorized", name)); err != nil {
+							logrus.Errorf("login error: %v", err)
+							continue
+						}
+						continue
+					}
+
+					loginText := fmt.Sprintf("Enter your username")
+					if err = b.requestForUsername(login, update.Message, loginText); err != nil {
+						logrus.Errorf("login error: %v", err)
+						continue
 					}
 					continue
 				default:

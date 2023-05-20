@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/chucky-1/finance/internal/model"
+	"github.com/jackc/pgx/v4"
 	"github.com/jackc/pgx/v4/pgxpool"
 )
 
@@ -37,8 +38,10 @@ func (u *UserPostgres) Get(ctx context.Context, username string) (*model.User, e
 	query := `SELECT username, password FROM finance.users WHERE username=$1`
 	var user model.User
 	err := u.conn.QueryRow(ctx, query, username).Scan(&user.Username, &user.Password)
-	if err != nil {
+	if err != nil && err != pgx.ErrNoRows {
 		return nil, fmt.Errorf("repository.User, get user error: %v", err)
+	} else if err == pgx.ErrNoRows {
+		return nil, nil
 	}
 	return &user, nil
 }
