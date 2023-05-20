@@ -172,8 +172,17 @@ func (b *Bot) Consume(ctx context.Context) {
 					logrus.Info("start command executed")
 					continue
 				case register:
-					// TODO проверка если пользователь уже в системе
 					logrus.Info("register command started executing")
+					name, authorized, err := b.checkUserAlreadyAuthorized(ctx, update.Message)
+					if err != nil {
+						logrus.Errorf("register error: %v", err)
+						continue
+					}
+					if authorized {
+						logrus.Errorf("register error: user %s already is authorized", name)
+						continue
+					}
+
 					registerText := fmt.Sprintf("Enter your username. Minimum %d, maximum %d characters", usernameMinLength, usernameMaxLength)
 					if err := b.requestForUsername(register, update.Message, registerText); err != nil {
 						logrus.Errorf("register error: %v", err)
@@ -182,21 +191,13 @@ func (b *Bot) Consume(ctx context.Context) {
 					continue
 				case login:
 					logrus.Info("login command started executing")
-					newCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-					name, err := b.chats.Get(newCtx, update.Message.Chat.ID)
+					name, authorized, err := b.checkUserAlreadyAuthorized(ctx, update.Message)
 					if err != nil {
 						logrus.Errorf("login error: %v", err)
-						cancel()
 						continue
 					}
-					cancel()
-
-					if name != "" {
-						logrus.Errorf("user %s already is authorized", name)
-						if err = b.sendMessage(update.Message, fmt.Sprintf("%s, you are already authorized", name)); err != nil {
-							logrus.Errorf("login error: %v", err)
-							continue
-						}
+					if authorized {
+						logrus.Errorf("login error: user %s already is authorized", name)
 						continue
 					}
 
@@ -226,7 +227,7 @@ func (b *Bot) handleUsername(action string, message *tgbotapi.Message) error {
 		}
 		return fmt.Errorf("user entered the wrong username: %s", username)
 	}
-	logrus.Infof("register, user entered username: %s", username)
+	logrus.Infof("%s, user entered username: %s", action, username)
 	return nil
 }
 
@@ -239,7 +240,7 @@ func (b *Bot) handlePassword(action string, message *tgbotapi.Message) error {
 		}
 		return fmt.Errorf("user %s entered the wrong password: %s", username, password)
 	}
-	logrus.Infof("register, user %s entered password: %s", username, password)
+	logrus.Infof("%s, user %s entered password: %s", action, username, password)
 	return nil
 }
 
@@ -288,6 +289,25 @@ func (b *Bot) sendMessage(message *tgbotapi.Message, text string) error {
 		return fmt.Errorf("sendMessage, telegram bot couldn't send message: %v", err)
 	}
 	return nil
+}
+
+func (b *Bot) checkUserAlreadyAuthorized(ctx context.Context, message *tgbotapi.Message) (string, bool, error) {
+	newCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	name, err := b.chats.Get(newCtx, message.Chat.ID)
+	if err != nil {
+		cancel()
+		return "", false, err
+	}
+	cancel()
+
+	if name != "" {
+		if err = b.sendMessage(message, fmt.Sprintf("%s, you are already authorized", name)); err != nil {
+			return "", false, err
+		}
+		return name, true, nil
+	}
+
+	return "", false, nil
 }
 
 func (b *Bot) validate(value string, tags string) bool {
