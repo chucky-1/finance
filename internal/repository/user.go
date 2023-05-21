@@ -25,6 +25,8 @@ func NewUserPostgres(conn *pgxpool.Pool) *UserPostgres {
 	}
 }
 
+// TODO added handling error when insert duplicate row. It possible when username isn't available
+
 func (u *UserPostgres) Create(ctx context.Context, user *model.User) error {
 	query := `INSERT INTO finance.users (username, password) VALUES ($1, $2)`
 	_, err := u.conn.Exec(ctx, query, user.Username, user.Password)
