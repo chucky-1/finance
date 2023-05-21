@@ -2,43 +2,65 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
 	"github.com/caarlos0/env/v8"
-	"github.com/chucky-1/finance/internal/consumer"
+	"github.com/go-playground/validator/v10"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/joho/godotenv"
 	"github.com/sirupsen/logrus"
 
 	"github.com/chucky-1/finance/internal/config"
+	"github.com/chucky-1/finance/internal/consumer"
+	"github.com/chucky-1/finance/internal/repository"
+	"github.com/chucky-1/finance/internal/service"
 )
 
 func main() {
+	//logrus.SetFormatter(new(logrus.JSONFormatter))
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-
-	cfg := config.Config{}
-	if err := env.Parse(&cfg); err != nil {
-		fmt.Printf("%+v\n", err)
-	}
 
 	if err := godotenv.Load(); err != nil {
 		logrus.Fatal("No .env file found")
 	}
 
-	bot, err := tgbotapi.NewBotAPI(os.Getenv("TG_TOKEN"))
+	cfg := config.Config{}
+	if err := env.Parse(&cfg); err != nil {
+		logrus.Fatalf("%+v\n", err)
+	}
+
+	conn, err := pgxpool.Connect(ctx, cfg.PostgresEndpoint)
+	if err != nil {
+		logrus.Fatalf("couldn't connect to database: %v", err)
+	}
+	if err = conn.Ping(ctx); err != nil {
+		logrus.Fatalf("couldn't ping database: %v", err)
+	}
+
+	bot, err := tgbotapi.NewBotAPI(cfg.TgToken)
 	if err != nil {
 		logrus.Fatal(err)
 	}
+	//bot.Debug = true
+	u := tgbotapi.NewUpdate(0)
+	u.Timeout = cfg.TgTimeout
+	updatesChan := bot.GetUpdatesChan(u)
 
-	bot.Debug = true
+	myValidator := validator.New()
 
-	tgBot := consumer.NewBot(bot, cfg.Telegram.Timeout)
-	tgBot.Consume(ctx)
+	userRepository := repository.NewUserPostgres(conn)
+	authService := service.NewAuth(userRepository, cfg.AuthSalt)
+
+	tgBot := consumer.NewHub(bot, updatesChan, myValidator, authService)
+	go tgBot.Consume(ctx)
+
+	logrus.Infof("app has started")
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGTERM, os.Interrupt)
