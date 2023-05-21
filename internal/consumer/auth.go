@@ -59,7 +59,7 @@ func (a *Auth) Consume(ctx context.Context) {
 			return
 
 		case update := <-a.updatesChan:
-			if update.Message.MessageID == a.waitRegisterMessageWithUsername {
+			if !update.Message.IsCommand() && update.Message.MessageID == a.waitRegisterMessageWithUsername {
 				if err := a.handleUsername(register, update.Message); err != nil {
 					logrus.Errorf("register error: %v", err)
 					continue
@@ -72,7 +72,7 @@ func (a *Auth) Consume(ctx context.Context) {
 				continue
 			}
 
-			if update.Message.MessageID == a.waitRegisterMessageWithPassword {
+			if !update.Message.IsCommand() && update.Message.MessageID == a.waitRegisterMessageWithPassword {
 				if err := a.handlePassword(register, update.Message); err != nil {
 					logrus.Errorf("register error: %v", err)
 					continue
@@ -100,7 +100,7 @@ func (a *Auth) Consume(ctx context.Context) {
 				return
 			}
 
-			if update.Message.MessageID == a.waitLoginMessageWithUsername {
+			if !update.Message.IsCommand() && update.Message.MessageID == a.waitLoginMessageWithUsername {
 				if err := a.handleUsername(login, update.Message); err != nil {
 					logrus.Errorf("login error: %v", err)
 					continue
@@ -112,7 +112,7 @@ func (a *Auth) Consume(ctx context.Context) {
 				continue
 			}
 
-			if update.Message.MessageID == a.waitLoginMessageWithPassword {
+			if !update.Message.IsCommand() && update.Message.MessageID == a.waitLoginMessageWithPassword {
 				if err := a.handlePassword(login, update.Message); err != nil {
 					logrus.Errorf("login error: %v", err)
 					continue
