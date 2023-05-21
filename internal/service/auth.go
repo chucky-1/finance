@@ -9,7 +9,7 @@ import (
 )
 
 type Authorization interface {
-	CreateUser(ctx context.Context, user *model.User) error
+	CreateUser(ctx context.Context, user *model.User) (bool, error)
 	Login(ctx context.Context, user *model.User) (bool, error)
 }
 
@@ -25,7 +25,7 @@ func NewAuth(repo repository.User, salt string) *Auth {
 	}
 }
 
-func (a *Auth) CreateUser(ctx context.Context, user *model.User) error {
+func (a *Auth) CreateUser(ctx context.Context, user *model.User) (bool, error) {
 	user.Password = a.generatePassword(user.Password)
 	return a.repo.Create(ctx, user)
 }

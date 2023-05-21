@@ -79,17 +79,27 @@ func (a *Auth) Consume(ctx context.Context) {
 				}
 
 				newCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-				if err := a.auth.CreateUser(newCtx, &model.User{
+				success, err := a.auth.CreateUser(newCtx, &model.User{
 					Username: a.username,
 					Password: a.password,
-				}); err != nil {
+				})
+				if err != nil {
 					logrus.Errorf("register error: %v", err)
 					cancel()
 					continue
 				}
 				cancel()
+				if !success {
+					logrus.Errorf("register error: user with username: %s already exist", a.username)
+					if err = a.requestForUsername(register, update.Message,
+						fmt.Sprintf("User with username: %s already exist. Try again! Enter your username", a.username)); err != nil {
+						logrus.Errorf("register error: %v", err)
+						continue
+					}
+					continue
+				}
 
-				if err := a.sendMessage(update.Message, fmt.Sprintf("Thank you, %s! You have successfully registered", a.username)); err != nil {
+				if err = a.sendMessage(update.Message, fmt.Sprintf("Thank you, %s! You have successfully registered", a.username)); err != nil {
 					logrus.Errorf("register error: %v", err)
 					continue
 				}

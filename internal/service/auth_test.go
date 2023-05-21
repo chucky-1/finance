@@ -8,7 +8,7 @@ import (
 )
 
 func TestAuth_generatePassword(t *testing.T) {
-	userRepo := new(mocks.Authorization)
+	userRepo := new(mocks.User)
 	salt := "iuyuofritu"
 	userServ := NewAuth(userRepo, salt)
 	inputPassword := "myNewStrongPassword"

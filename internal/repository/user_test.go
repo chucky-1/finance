@@ -92,13 +92,41 @@ func TestUserPostgres_CreateGet(t *testing.T) {
 		Username: "user",
 		Password: "secret",
 	}
-	err := authRepo.Create(ctx, &user)
+	success, err := authRepo.Create(ctx, &user)
 	if err != nil {
 		t.Fatal(err)
 	}
+	require.Equal(t, true, success)
 
 	u, err := authRepo.Get(ctx, user.Username)
 
 	logrus.Infof("recieved user: %v", u)
 	require.Equal(t, &user, u)
+}
+
+func TestUserPostgres_CreateSetDuplicate(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	defer func() {
+		_, err := dbPool.Exec(ctx, `TRUNCATE TABLE finance.users`)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}()
+
+	user := model.User{
+		Username: "user",
+		Password: "secret",
+	}
+	success, err := authRepo.Create(ctx, &user)
+	if err != nil {
+		t.Fatal(err)
+	}
+	require.Equal(t, true, success)
+
+	success, err = authRepo.Create(ctx, &user)
+	if err != nil {
+		t.Fatal(err)
+	}
+	require.Equal(t, false, success)
 }

@@ -8,10 +8,10 @@ import (
 	"github.com/jackc/pgx/v4/pgxpool"
 )
 
-//go:generate mockery --name=Authorization
+//go:generate mockery --name=User
 
 type User interface {
-	Create(ctx context.Context, user *model.User) error
+	Create(ctx context.Context, user *model.User) (bool, error)
 	Get(ctx context.Context, username string) (*model.User, error)
 }
 
@@ -25,15 +25,16 @@ func NewUserPostgres(conn *pgxpool.Pool) *UserPostgres {
 	}
 }
 
-// TODO added handling error when insert duplicate row. It possible when username isn't available
-
-func (u *UserPostgres) Create(ctx context.Context, user *model.User) error {
-	query := `INSERT INTO finance.users (username, password) VALUES ($1, $2)`
-	_, err := u.conn.Exec(ctx, query, user.Username, user.Password)
+func (u *UserPostgres) Create(ctx context.Context, user *model.User) (bool, error) {
+	query := `INSERT INTO finance.users (username, password) VALUES ($1, $2) ON CONFLICT DO NOTHING`
+	commandTag, err := u.conn.Exec(ctx, query, user.Username, user.Password)
 	if err != nil {
-		return fmt.Errorf("repository.User, create user error: %v", err)
+		return false, fmt.Errorf("repository.User, create user error: %v", err)
 	}
-	return nil
+	if commandTag.RowsAffected() != 1 {
+		return false, nil
+	}
+	return true, nil
 }
 
 func (u *UserPostgres) Get(ctx context.Context, username string) (*model.User, error) {
