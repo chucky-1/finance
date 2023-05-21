@@ -10,6 +10,13 @@ stop-postgres:
 migrate:
 	flyway -user=${POSTGRES_USER} -password=${POSTGRES_PASSWORD} -locations=filesystem:./migrations -url=jdbc:postgresql://localhost:${POSTGRES_PORT}/${POSTGRES_DB} migrate
 
+start-mongo:
+	docker run --name finance-mongo -p 27017:27017 -d mongo:latest
+
+stop-mongo:
+	docker stop finance-mongo
+	docker rm finance-mongo
+
 build:
 	go build -o ./.bin/finance ./main.go
 

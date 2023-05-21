@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 	"os"
 	"os/signal"
 	"syscall"
@@ -59,6 +61,20 @@ func main() {
 
 	tgBot := consumer.NewHub(bot, updatesChan, myValidator, authService)
 	go tgBot.Consume(ctx)
+
+	client, err := mongo.Connect(ctx, options.Client().ApplyURI(cfg.MongoURI))
+	if err != nil {
+		logrus.Fatalf("couldn't connect to mongo: %v", err)
+	}
+	err = client.Ping(ctx, nil)
+	if err != nil {
+		logrus.Fatalf("failed ping to mongo: %v", err)
+	}
+	defer func() {
+		if err = client.Disconnect(context.TODO()); err != nil {
+			logrus.Fatalf("couldn't disconnect to mongo: %v", err)
+		}
+	}()
 
 	logrus.Infof("app has started")
 
