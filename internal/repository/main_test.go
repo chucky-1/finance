@@ -3,15 +3,16 @@ package repository
 import (
 	"context"
 	"fmt"
+	"os"
+	"os/exec"
+	"testing"
+
 	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/ory/dockertest/v3"
 	"github.com/ory/dockertest/v3/docker"
 	"github.com/sirupsen/logrus"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
-	"os"
-	"os/exec"
-	"testing"
 )
 
 var (
@@ -120,11 +121,11 @@ func initialMongo(ctx context.Context, pool *dockertest.Pool) *dockertest.Resour
 
 	// exponential backoff-retry, because the application in the container might not be ready to accept connections yet
 	err = pool.Retry(func() error {
+		uri := fmt.Sprintf("mongodb://root:password@localhost:%s", resource.GetPort("27017/tcp"))
+		logrus.Infof("mongo URI: %s", uri)
 		mongoCli, err = mongo.Connect(
 			ctx,
-			options.Client().ApplyURI(
-				fmt.Sprintf("mongodb://root:password@localhost:%s", resource.GetPort("27017/tcp")),
-			),
+			options.Client().ApplyURI(uri),
 		)
 		if err != nil {
 			return err
