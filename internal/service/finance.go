@@ -18,11 +18,20 @@ func NewFinance(repo *repository.Finance) *Finance {
 	}
 }
 
+// TODO transaction
+
 func (f *Finance) Add(ctx context.Context, entry *model.Entry) error {
-	err := f.repo.Add(ctx, entry)
-	if err != nil {
+	tp := entry.Type
+
+	if err := f.repo.Add(ctx, entry); err != nil {
 		return err
 	}
-	entry.Type = fmt.Sprintf("today_%s", entry.Type)
-	return f.repo.Add(ctx, entry)
+
+	entry.Type = fmt.Sprintf("today_%s", tp)
+	if err := f.repo.Add(ctx, entry); err != nil {
+		return err
+	}
+
+	entry.Type = fmt.Sprintf("last_%s", tp)
+	return f.repo.Replace(ctx, entry)
 }
