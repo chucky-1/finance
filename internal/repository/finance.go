@@ -33,6 +33,19 @@ func (f *Finance) Add(ctx context.Context, entry *model.Entry) error {
 	return nil
 }
 
+func (f *Finance) Replace(ctx context.Context, entry *model.Entry) error {
+	_, err := f.cli.Database(entry.Type).Collection(entry.Date.Format(layout)).ReplaceOne(ctx,
+		bson.D{{Key: "user", Value: entry.User}},
+		bson.D{
+			{Key: "user", Value: entry.User},
+			{Key: entry.Item, Value: entry.Sum},
+		}, options.Replace().SetUpsert(true))
+	if err != nil {
+		return fmt.Errorf("repository.Finance.Replace error: %v", err)
+	}
+	return nil
+}
+
 func (f *Finance) Get(ctx context.Context, entry *model.Entry) (map[string]float64, error) {
 	result := f.cli.Database(entry.Type).Collection(entry.Date.Format(layout)).FindOne(ctx,
 		bson.D{{Key: "user", Value: entry.User}})
