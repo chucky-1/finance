@@ -25,7 +25,7 @@ const (
 
 type Auth struct {
 	bot         *tgbotapi.BotAPI
-	updatesChan tgbotapi.UpdatesChannel
+	updatesChan chan tgbotapi.Update
 	validator   *validator.Validate
 	auth        service.Authorization
 	finish      chan<- int64
@@ -38,7 +38,7 @@ type Auth struct {
 	password                        string
 }
 
-func NewAuth(bot *tgbotapi.BotAPI, updatesChan tgbotapi.UpdatesChannel, validator *validator.Validate, auth service.Authorization,
+func NewAuth(bot *tgbotapi.BotAPI, updatesChan chan tgbotapi.Update, validator *validator.Validate, auth service.Authorization,
 	finish chan<- int64) *Auth {
 	return &Auth{
 		bot:         bot,

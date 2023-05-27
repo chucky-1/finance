@@ -18,8 +18,6 @@ func NewFinance(repo *repository.Finance) *Finance {
 	}
 }
 
-// TODO transaction
-
 func (f *Finance) Add(ctx context.Context, entry *model.Entry) error {
 	tp := entry.Type
 

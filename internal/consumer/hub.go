@@ -40,14 +40,10 @@ func (h *Hub) Consume(ctx context.Context) {
 			if update.Message.IsCommand() {
 				switch update.Message.Command() {
 				case register, login:
-					authorized, err := h.checkUserAlreadyAuthorized(update.Message.Chat.ID)
-					if err != nil {
-						logrus.Errorf("register/login error: %v", err)
-						continue
-					}
+					authorized := h.checkUserAlreadyAuthorized(update.Message.Chat.ID)
 					if authorized {
 						logrus.Errorf("register/login error: user with chat %d already is authorized", update.Message.Chat.ID)
-						if err = h.sendMessage(update.Message, "you are already authorized"); err != nil {
+						if err := h.sendMessage(update.Message, "you are already authorized"); err != nil {
 							logrus.Errorf("register/login error: %v", err)
 							continue
 						}
@@ -106,12 +102,12 @@ func (h *Hub) listenFinish(ctx context.Context, finishChan chan int64) {
 	}
 }
 
-func (h *Hub) checkUserAlreadyAuthorized(chatID int64) (bool, error) {
+func (h *Hub) checkUserAlreadyAuthorized(chatID int64) bool {
 	_, ok := h.financeChannels[chatID]
 	if !ok {
-		return false, nil
+		return false
 	}
-	return true, nil
+	return true
 }
 
 func (h *Hub) sendMessage(message *tgbotapi.Message, text string) error {
