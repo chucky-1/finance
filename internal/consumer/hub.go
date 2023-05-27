@@ -15,7 +15,7 @@ type Hub struct {
 	validator       *validator.Validate
 	authService     service.Authorization
 	authChannels    map[int64]chan tgbotapi.Update
-	financeChannels map[int64]chan struct{}
+	financeChannels map[int64]chan tgbotapi.Update
 }
 
 func NewHub(bot *tgbotapi.BotAPI, updatesChan tgbotapi.UpdatesChannel, validator *validator.Validate, authService service.Authorization) *Hub {
@@ -25,7 +25,7 @@ func NewHub(bot *tgbotapi.BotAPI, updatesChan tgbotapi.UpdatesChannel, validator
 		validator:       validator,
 		authService:     authService,
 		authChannels:    make(map[int64]chan tgbotapi.Update),
-		financeChannels: make(map[int64]chan struct{}),
+		financeChannels: make(map[int64]chan tgbotapi.Update),
 	}
 }
 
@@ -40,8 +40,8 @@ func (h *Hub) Consume(ctx context.Context) {
 			if update.Message.IsCommand() {
 				switch update.Message.Command() {
 				case register, login:
-					authorized := h.checkUserAlreadyAuthorized(update.Message.Chat.ID)
-					if authorized {
+					logrus.Infof("received message in hub consumer to register or login from chat %d", update.Message.Chat.ID)
+					if h.authorized(update.Message.Chat.ID) {
 						logrus.Errorf("register/login error: user with chat %d already is authorized", update.Message.Chat.ID)
 						if err := h.sendMessage(update.Message, "you are already authorized"); err != nil {
 							logrus.Errorf("register/login error: %v", err)
@@ -61,15 +61,28 @@ func (h *Hub) Consume(ctx context.Context) {
 					}
 					ch <- update
 					continue
+				case add:
+					logrus.Infof("received message in hub consumer to add from chat %d", update.Message.Chat.ID)
+					if !h.authorized(update.Message.Chat.ID) {
+						logrus.Errorf("add error: user with chat %d isn't authorized", update.Message.Chat.ID)
+						if err := h.sendMessage(update.Message, "you aren't authorized"); err != nil {
+							logrus.Errorf("add error: %v", err)
+							continue
+						}
+						continue
+					}
+					financeCh, ok := h.financeChannels[update.Message.Chat.ID]
+					if ok {
+						financeCh <- update
+						continue
+					} else {
+						logrus.Errorf("user with id %d is authorized but there's no channel in map finance")
+						continue
+					}
 				default:
 					logrus.Info("unknown command: %s", update.Message.Text)
 					continue
 				}
-			}
-			financeCh, ok := h.financeChannels[update.Message.Chat.ID]
-			if ok {
-				financeCh <- struct{}{}
-				continue
 			}
 			authCh, ok := h.authChannels[update.Message.Chat.ID]
 			if ok {
@@ -98,11 +111,13 @@ func (h *Hub) listenFinish(ctx context.Context, finishChan chan int64) {
 	case chatID := <-finishChan:
 		logrus.Infof("hub received message in finish chat with chat id %d", chatID)
 		delete(h.authChannels, chatID)
-		h.financeChannels[chatID] = make(chan struct{})
+		financeChan := make(chan tgbotapi.Update)
+		h.financeChannels[chatID] = financeChan
+		go NewFinance(financeChan).Consume(ctx)
 	}
 }
 
-func (h *Hub) checkUserAlreadyAuthorized(chatID int64) bool {
+func (h *Hub) authorized(chatID int64) bool {
 	_, ok := h.financeChannels[chatID]
 	if !ok {
 		return false
