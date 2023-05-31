@@ -61,7 +61,7 @@ func (h *Hub) Consume(ctx context.Context) {
 					}
 					ch <- update
 					continue
-				case add:
+				case expensesAdd:
 					logrus.Infof("received message in hub consumer to add from chat %d", update.Message.Chat.ID)
 					if !h.authorized(update.Message.Chat.ID) {
 						logrus.Errorf("add error: user with chat %d isn't authorized", update.Message.Chat.ID)
@@ -80,7 +80,7 @@ func (h *Hub) Consume(ctx context.Context) {
 						continue
 					}
 				default:
-					logrus.Info("unknown command: %s", update.Message.Text)
+					logrus.Infof("unknown command: %s", update.Message.Text)
 					continue
 				}
 			}
@@ -94,8 +94,8 @@ func (h *Hub) Consume(ctx context.Context) {
 	}
 }
 
-func (h *Hub) startAuthConsumer(ctx context.Context, chatID int64) (chan tgbotapi.Update, chan int64) {
-	finishChan := make(chan int64)
+func (h *Hub) startAuthConsumer(ctx context.Context, chatID int64) (chan tgbotapi.Update, chan *finishData) {
+	finishChan := make(chan *finishData)
 	newUpdatesChan := make(chan tgbotapi.Update)
 	h.authChannels[chatID] = newUpdatesChan
 	authConsumer := NewAuth(h.bot, newUpdatesChan, h.validator, h.authService, finishChan)
@@ -104,16 +104,16 @@ func (h *Hub) startAuthConsumer(ctx context.Context, chatID int64) (chan tgbotap
 	return newUpdatesChan, finishChan
 }
 
-func (h *Hub) listenFinish(ctx context.Context, finishChan chan int64) {
+func (h *Hub) listenFinish(ctx context.Context, finishChan chan *finishData) {
 	select {
 	case <-ctx.Done():
 		return
-	case chatID := <-finishChan:
-		logrus.Infof("hub received message in finish chat with chat id %d", chatID)
-		delete(h.authChannels, chatID)
+	case data := <-finishChan:
+		logrus.Infof("hub received message in finish chat with chat id %d", data.chatID)
+		delete(h.authChannels, data.chatID)
 		financeChan := make(chan tgbotapi.Update)
-		h.financeChannels[chatID] = financeChan
-		go NewFinance(financeChan).Consume(ctx)
+		h.financeChannels[data.chatID] = financeChan
+		go NewFinance(h.bot, data.username, financeChan).Consume(ctx)
 	}
 }
 

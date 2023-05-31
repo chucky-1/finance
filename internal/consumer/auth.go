@@ -23,12 +23,17 @@ const (
 	passwordMaxLength = 15
 )
 
+type finishData struct {
+	username string
+	chatID   int64
+}
+
 type Auth struct {
 	bot         *tgbotapi.BotAPI
 	updatesChan chan tgbotapi.Update
 	validator   *validator.Validate
 	auth        service.Authorization
-	finish      chan<- int64
+	finish      chan<- *finishData
 
 	waitRegisterMessageWithUsername int
 	waitRegisterMessageWithPassword int
@@ -39,7 +44,7 @@ type Auth struct {
 }
 
 func NewAuth(bot *tgbotapi.BotAPI, updatesChan chan tgbotapi.Update, validator *validator.Validate, auth service.Authorization,
-	finish chan<- int64) *Auth {
+	finish chan<- *finishData) *Auth {
 	return &Auth{
 		bot:         bot,
 		updatesChan: updatesChan,
@@ -106,7 +111,10 @@ func (a *Auth) Consume(ctx context.Context) {
 
 				logrus.Infof("user %s successful registered", a.username)
 				logrus.Infof("auth consumer for user %s stopped", a.username)
-				a.finish <- update.Message.Chat.ID
+				a.finish <- &finishData{
+					username: a.username,
+					chatID:   update.Message.Chat.ID,
+				}
 				return
 			}
 
@@ -155,7 +163,10 @@ func (a *Auth) Consume(ctx context.Context) {
 
 				logrus.Infof("user %s is authorized", a.username)
 				logrus.Infof("auth consumer for user %s stopped", a.username)
-				a.finish <- update.Message.Chat.ID
+				a.finish <- &finishData{
+					username: a.username,
+					chatID:   update.Message.Chat.ID,
+				}
 				return
 			}
 
