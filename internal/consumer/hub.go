@@ -37,6 +37,12 @@ func (h *Hub) Consume(ctx context.Context) {
 			logrus.Infof("hub consumer stopped: %v", ctx.Err())
 			return
 		case update := <-h.updatesChan:
+			financeCh, ok := h.financeChannels[update.Message.Chat.ID]
+			if ok {
+				financeCh <- update
+				continue
+			}
+
 			if update.Message.IsCommand() {
 				switch update.Message.Command() {
 				case register, login:
@@ -61,29 +67,12 @@ func (h *Hub) Consume(ctx context.Context) {
 					}
 					ch <- update
 					continue
-				case expensesAdd:
-					logrus.Infof("received message in hub consumer to add from chat %d", update.Message.Chat.ID)
-					if !h.authorized(update.Message.Chat.ID) {
-						logrus.Errorf("add error: user with chat %d isn't authorized", update.Message.Chat.ID)
-						if err := h.sendMessage(update.Message, "you aren't authorized"); err != nil {
-							logrus.Errorf("add error: %v", err)
-							continue
-						}
-						continue
-					}
-					financeCh, ok := h.financeChannels[update.Message.Chat.ID]
-					if ok {
-						financeCh <- update
-						continue
-					} else {
-						logrus.Errorf("user with id %d is authorized but there's no channel in map finance")
-						continue
-					}
 				default:
 					logrus.Infof("unknown command: %s", update.Message.Text)
 					continue
 				}
 			}
+
 			authCh, ok := h.authChannels[update.Message.Chat.ID]
 			if ok {
 				authCh <- update

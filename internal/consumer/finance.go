@@ -5,11 +5,8 @@ import (
 	"fmt"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/sirupsen/logrus"
+	"strconv"
 	"strings"
-)
-
-const (
-	expensesAdd = "a"
 )
 
 type Finance struct {
@@ -34,25 +31,29 @@ func (f *Finance) Consume(ctx context.Context) {
 			logrus.Infof("finance consumer stopped: %v", ctx.Err())
 			return
 		case update := <-f.updatesChan:
-			if update.Message.IsCommand() {
-				switch update.Message.Command() {
-				case expensesAdd:
-					logrus.Infof("received message in finance consumer to add from username: %s", f.username)
-					args := strings.Split(update.Message.CommandArguments(), " ")
-					if len(args) != 2 {
-						err := f.sendMessage(update.Message, fmt.Sprintf("%s, I can't process it. You only have to enter two words separated by a space. Expense item and amount", f.username))
-						if err != nil {
-							logrus.Errorf("finance consumer adding expenses error: received invalid message: %s from user %s",
-								update.Message.Text, f.username)
-							continue
-						}
-						continue
-					}
-					logrus.Infof("adding expense: %s, %s", args[0], args[1])
+			logrus.Infof("received message in finance consumer from username: %s", f.username)
+			args := strings.Split(update.Message.Text, " ")
+			if len(args) != 2 {
+				logrus.Errorf("finance consumer received invalid message: %s", update.Message.Text)
+				err := f.sendMessage(update.Message, fmt.Sprintf("%s, I can't process it. You only have to enter two words separated by a space. Expense item and amount", f.username))
+				if err != nil {
+					logrus.Errorf("finance consumer send message error: %v", err)
 					continue
 				}
+				continue
 			}
-			logrus.Infof("received message in finance consumer: %s", update.Message.Text)
+
+			sum, err := strconv.ParseFloat(args[1], 64)
+			if err != nil {
+				logrus.Errorf("finance consumer couldn't parseFloat: %v", err)
+				err = f.sendMessage(update.Message, fmt.Sprintf("%s, the second argument must be a number", f.username))
+				if err != nil {
+					logrus.Errorf("finance consumer send message error: %v", err)
+					continue
+				}
+				continue
+			}
+			logrus.Infof("adding expense: %s, sum: %f", args[0], sum)
 		}
 	}
 }
