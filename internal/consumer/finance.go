@@ -3,23 +3,28 @@ package consumer
 import (
 	"context"
 	"fmt"
+	"github.com/chucky-1/finance/internal/model"
+	"github.com/chucky-1/finance/internal/service"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/sirupsen/logrus"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type Finance struct {
 	bot         *tgbotapi.BotAPI
 	username    string
 	updatesChan chan tgbotapi.Update
+	serv        service.Finance
 }
 
-func NewFinance(bot *tgbotapi.BotAPI, username string, updatesChan chan tgbotapi.Update) *Finance {
+func NewFinance(bot *tgbotapi.BotAPI, username string, updatesChan chan tgbotapi.Update, serv service.Finance) *Finance {
 	return &Finance{
 		bot:         bot,
 		username:    username,
 		updatesChan: updatesChan,
+		serv:        serv,
 	}
 }
 
@@ -53,7 +58,29 @@ func (f *Finance) Consume(ctx context.Context) {
 				}
 				continue
 			}
-			logrus.Infof("adding expense: %s, sum: %f", args[0], sum)
+
+			newCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+			err = f.serv.Add(newCtx, &model.Entry{
+				Type: "expenses",
+				Item: args[0],
+				User: f.username,
+				Date: time.Now().UTC(),
+				Sum:  sum,
+			})
+			if err != nil {
+				logrus.Errorf("finance consumer couldn't Add: %v", err)
+				cancel()
+				continue
+			}
+			cancel()
+
+			err = f.sendMessage(update.Message, fmt.Sprintf("Added expenses %s: %f", args[0], sum))
+			if err != nil {
+				logrus.Errorf("finance consumer send message error: %v", err)
+				continue
+			}
+
+			logrus.Infof("%s added expenses: %s: %f", f.username, args[0], sum)
 		}
 	}
 }

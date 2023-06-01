@@ -71,9 +71,11 @@ func main() {
 	myValidator := validator.New()
 
 	userRepository := repository.NewUserPostgres(conn)
+	financeRepository := repository.NewFinance(client)
 	authService := service.NewAuth(userRepository, cfg.AuthSalt)
+	financeService := service.NewFinance(financeRepository)
 
-	tgBot := consumer.NewHub(bot, updatesChan, myValidator, authService)
+	tgBot := consumer.NewHub(bot, updatesChan, myValidator, authService, financeService)
 	go tgBot.Consume(ctx)
 
 	logrus.Infof("app has started")

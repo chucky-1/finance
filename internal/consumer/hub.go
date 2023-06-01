@@ -14,16 +14,19 @@ type Hub struct {
 	updatesChan     tgbotapi.UpdatesChannel
 	validator       *validator.Validate
 	authService     service.Authorization
+	financeService  service.Finance
 	authChannels    map[int64]chan tgbotapi.Update
 	financeChannels map[int64]chan tgbotapi.Update
 }
 
-func NewHub(bot *tgbotapi.BotAPI, updatesChan tgbotapi.UpdatesChannel, validator *validator.Validate, authService service.Authorization) *Hub {
+func NewHub(bot *tgbotapi.BotAPI, updatesChan tgbotapi.UpdatesChannel, validator *validator.Validate,
+	authService service.Authorization, financeService service.Finance) *Hub {
 	return &Hub{
 		bot:             bot,
 		updatesChan:     updatesChan,
 		validator:       validator,
 		authService:     authService,
+		financeService:  financeService,
 		authChannels:    make(map[int64]chan tgbotapi.Update),
 		financeChannels: make(map[int64]chan tgbotapi.Update),
 	}
@@ -102,7 +105,7 @@ func (h *Hub) listenFinish(ctx context.Context, finishChan chan *finishData) {
 		delete(h.authChannels, data.chatID)
 		financeChan := make(chan tgbotapi.Update)
 		h.financeChannels[data.chatID] = financeChan
-		go NewFinance(h.bot, data.username, financeChan).Consume(ctx)
+		go NewFinance(h.bot, data.username, financeChan, h.financeService).Consume(ctx)
 	}
 }
 

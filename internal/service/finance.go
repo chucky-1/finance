@@ -8,17 +8,21 @@ import (
 	"github.com/chucky-1/finance/internal/repository"
 )
 
-type Finance struct {
+type Finance interface {
+	Add(ctx context.Context, entry *model.Entry) error
+}
+
+type finance struct {
 	repo *repository.Finance
 }
 
-func NewFinance(repo *repository.Finance) *Finance {
-	return &Finance{
+func NewFinance(repo *repository.Finance) *finance {
+	return &finance{
 		repo: repo,
 	}
 }
 
-func (f *Finance) Add(ctx context.Context, entry *model.Entry) error {
+func (f *finance) Add(ctx context.Context, entry *model.Entry) error {
 	tp := entry.Type
 
 	if err := f.repo.Add(ctx, entry); err != nil {
