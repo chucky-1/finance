@@ -30,10 +30,5 @@ func (f *finance) Add(ctx context.Context, entry *model.Entry) error {
 	}
 
 	entry.Type = fmt.Sprintf("today_%s", tp)
-	if err := f.repo.Add(ctx, entry); err != nil {
-		return err
-	}
-
-	entry.Type = fmt.Sprintf("last_%s", tp)
-	return f.repo.Replace(ctx, entry)
+	return f.repo.Add(ctx, entry)
 }
