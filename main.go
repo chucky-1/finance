@@ -78,9 +78,6 @@ func main() {
 	tgBot := consumer.NewHub(bot, updatesChan, myValidator, authService, financeService)
 	go tgBot.Consume(ctx)
 
-	cleaner := consumer.NewCleaner(financeRepository)
-	go cleaner.Consume(ctx)
-
 	logrus.Infof("app has started")
 
 	quit := make(chan os.Signal, 1)

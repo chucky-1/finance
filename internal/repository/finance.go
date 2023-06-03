@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"fmt"
+
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -58,14 +59,6 @@ func (f *Finance) Get(ctx context.Context, entry *model.Entry) (map[string]float
 		return nil, fmt.Errorf("repository.Finance.Get Decode error: %v", err)
 	}
 	return unmarshal(&data)
-}
-
-func (f *Finance) ClearYesterday(ctx context.Context, entry *model.Entry) error {
-	err := f.cli.Database(entry.Type).Collection(entry.Date.Format(layout)).Drop(ctx)
-	if err != nil {
-		return fmt.Errorf("repository.Finance.ClearYesterday: %v", err)
-	}
-	return nil
 }
 
 func unmarshal(data *bson.D) (map[string]float64, error) {
