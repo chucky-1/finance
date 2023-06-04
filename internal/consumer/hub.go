@@ -3,6 +3,7 @@ package consumer
 import (
 	"context"
 	"fmt"
+	"github.com/chucky-1/finance/internal/producer"
 	"github.com/chucky-1/finance/internal/service"
 	"github.com/go-playground/validator/v10"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
@@ -17,10 +18,11 @@ type Hub struct {
 	financeService  service.Finance
 	authChannels    map[int64]chan tgbotapi.Update
 	financeChannels map[int64]chan tgbotapi.Update
+	tgUsersCh       chan<- producer.TGUser
 }
 
 func NewHub(bot *tgbotapi.BotAPI, updatesChan tgbotapi.UpdatesChannel, validator *validator.Validate,
-	authService service.Authorization, financeService service.Finance) *Hub {
+	authService service.Authorization, financeService service.Finance, tgUsersCh chan producer.TGUser) *Hub {
 	return &Hub{
 		bot:             bot,
 		updatesChan:     updatesChan,
@@ -29,6 +31,7 @@ func NewHub(bot *tgbotapi.BotAPI, updatesChan tgbotapi.UpdatesChannel, validator
 		financeService:  financeService,
 		authChannels:    make(map[int64]chan tgbotapi.Update),
 		financeChannels: make(map[int64]chan tgbotapi.Update),
+		tgUsersCh:       tgUsersCh,
 	}
 }
 
@@ -106,6 +109,10 @@ func (h *Hub) listenFinish(ctx context.Context, finishChan chan *finishData) {
 		financeChan := make(chan tgbotapi.Update)
 		h.financeChannels[data.chatID] = financeChan
 		go NewFinance(h.bot, data.username, financeChan, h.financeService).Consume(ctx)
+		h.tgUsersCh <- producer.TGUser{
+			TGUsername: data.tgUsername,
+			Username:   data.username,
+		}
 	}
 }
 

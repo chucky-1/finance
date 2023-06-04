@@ -26,8 +26,9 @@ const (
 )
 
 type finishData struct {
-	username string
-	chatID   int64
+	username   string
+	chatID     int64
+	tgUsername string
 }
 
 type Auth struct {
@@ -132,8 +133,9 @@ func (a *Auth) Consume(ctx context.Context) {
 				logrus.Infof("user %s successful registered", a.username)
 				logrus.Infof("auth consumer for user %s stopped", a.username)
 				a.finish <- &finishData{
-					username: a.username,
-					chatID:   update.Message.Chat.ID,
+					username:   a.username,
+					chatID:     update.Message.Chat.ID,
+					tgUsername: update.SentFrom().UserName,
 				}
 				return
 			}
@@ -184,8 +186,9 @@ func (a *Auth) Consume(ctx context.Context) {
 				logrus.Infof("user %s is authorized", a.username)
 				logrus.Infof("auth consumer for user %s stopped", a.username)
 				a.finish <- &finishData{
-					username: a.username,
-					chatID:   update.Message.Chat.ID,
+					username:   a.username,
+					chatID:     update.Message.Chat.ID,
+					tgUsername: update.SentFrom().UserName,
 				}
 				return
 			}

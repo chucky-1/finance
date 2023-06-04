@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"github.com/chucky-1/finance/internal/producer"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"os"
@@ -59,14 +60,14 @@ func main() {
 		}
 	}()
 
-	bot, err := tgbotapi.NewBotAPI(cfg.TgToken)
+	mainBot, err := tgbotapi.NewBotAPI(cfg.TGMainBotToken)
 	if err != nil {
 		logrus.Fatal(err)
 	}
 	//bot.Debug = true
 	u := tgbotapi.NewUpdate(0)
-	u.Timeout = cfg.TgTimeout
-	updatesChan := bot.GetUpdatesChan(u)
+	u.Timeout = cfg.TGMainTimeout
+	updatesChan := mainBot.GetUpdatesChan(u)
 
 	myValidator := validator.New()
 
@@ -75,8 +76,29 @@ func main() {
 	authService := service.NewAuth(userRepository, cfg.AuthSalt)
 	financeService := service.NewFinance(financeRepository)
 
-	tgBot := consumer.NewHub(bot, updatesChan, myValidator, authService, financeService)
-	go tgBot.Consume(ctx)
+	tgUsersChan := make(chan producer.TGUser)
+
+	hub := consumer.NewHub(mainBot, updatesChan, myValidator, authService, financeService, tgUsersChan)
+	go hub.Consume(ctx)
+
+	dailyReporterBot, err := tgbotapi.NewBotAPI(cfg.TGDailyReporterBotToken)
+	if err != nil {
+		logrus.Fatal(err)
+	}
+	dailyUpdate := tgbotapi.NewUpdate(0)
+	dailyUpdate.Timeout = cfg.TGDailyTimeout
+	dailyUpdatesChan := dailyReporterBot.GetUpdatesChan(dailyUpdate)
+
+	monthlyReporterBot, err := tgbotapi.NewBotAPI(cfg.TGMonthlyReporterBotToken)
+	if err != nil {
+		logrus.Fatal(err)
+	}
+	monthlyUpdate := tgbotapi.NewUpdate(0)
+	monthlyUpdate.Timeout = cfg.TGMonthlyTimeout
+	monthlyUpdatesChan := monthlyReporterBot.GetUpdatesChan(monthlyUpdate)
+
+	reporterProducer := producer.NewReporter(dailyReporterBot, monthlyReporterBot, dailyUpdatesChan, monthlyUpdatesChan, tgUsersChan)
+	go reporterProducer.Produce(ctx)
 
 	logrus.Infof("app has started")
 
