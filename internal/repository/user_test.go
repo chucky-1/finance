@@ -27,6 +27,8 @@ func TestUserPostgres_CreateGet(t *testing.T) {
 	user := model.User{
 		Username: "user",
 		Password: "secret",
+		Country:  "Belarus",
+		Timezone: 3,
 	}
 	success, err := authRepo.Create(ctx, &user)
 	if err != nil {
@@ -53,6 +55,8 @@ func TestUserPostgres_CreateSetDuplicate(t *testing.T) {
 	user := model.User{
 		Username: "user",
 		Password: "secret",
+		Country:  "Belarus",
+		Timezone: 3,
 	}
 	success, err := authRepo.Create(ctx, &user)
 	if err != nil {

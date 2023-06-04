@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"github.com/chucky-1/finance/internal/model"
 	"github.com/chucky-1/finance/internal/service"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-playground/validator/v10"
@@ -36,10 +38,13 @@ type Auth struct {
 	finish      chan<- *finishData
 
 	waitRegisterMessageWithUsername int
+	waitRegisterMessageWithCountry  int
 	waitRegisterMessageWithPassword int
 	waitLoginMessageWithUsername    int
 	waitLoginMessageWithPassword    int
 	username                        string
+	country                         string
+	timezone                        int
 	password                        string
 }
 
@@ -69,6 +74,19 @@ func (a *Auth) Consume(ctx context.Context) {
 					logrus.Errorf("register error: %v", err)
 					continue
 				}
+
+				if err := a.requestForCountry(update.Message); err != nil {
+					logrus.Errorf("register error: %v", err)
+					continue
+				}
+			}
+
+			if !update.Message.IsCommand() && update.Message.MessageID == a.waitRegisterMessageWithCountry {
+				if err := a.handleCountry(update.Message); err != nil {
+					logrus.Errorf("register error: %v", err)
+					continue
+				}
+
 				if err := a.requestForPassword(register, update.Message,
 					fmt.Sprintf("Enter your password. Maximum %d characters", passwordMaxLength)); err != nil {
 					logrus.Errorf("register error: %v", err)
@@ -87,6 +105,8 @@ func (a *Auth) Consume(ctx context.Context) {
 				success, err := a.auth.CreateUser(newCtx, &model.User{
 					Username: a.username,
 					Password: a.password,
+					Country:  a.country,
+					Timezone: a.timezone,
 				})
 				if err != nil {
 					logrus.Errorf("register error: %v", err)
@@ -220,6 +240,19 @@ func (a *Auth) handlePassword(action string, message *tgbotapi.Message) error {
 	return nil
 }
 
+func (a *Auth) handleCountry(message *tgbotapi.Message) error {
+	a.country = strings.Trim(strings.Split(message.Text, " ")[0], ",")
+	_, after, _ := strings.Cut(message.Text, "GMT")
+	timezoneString := strings.Trim(after, ")")
+	timezone, err := strconv.ParseInt(timezoneString, 10, 32)
+	if err != nil {
+		return fmt.Errorf("handle country couldn't parse int: %v", err)
+	}
+	a.timezone = int(timezone)
+	logrus.Infof("%s chose country: %s and timezone: %d", a.username, a.country, a.timezone)
+	return nil
+}
+
 func (a *Auth) requestForUsername(action string, message *tgbotapi.Message, text string) error {
 	msg := tgbotapi.NewMessage(message.Chat.ID, text)
 	msg.ReplyToMessageID = message.MessageID
@@ -241,6 +274,7 @@ func (a *Auth) requestForUsername(action string, message *tgbotapi.Message, text
 func (a *Auth) requestForPassword(action string, message *tgbotapi.Message, text string) error {
 	msg := tgbotapi.NewMessage(message.Chat.ID, text)
 	msg.ReplyToMessageID = message.MessageID
+	msg.ReplyMarkup = tgbotapi.NewRemoveKeyboard(true)
 
 	switch action {
 	case register:
@@ -252,6 +286,38 @@ func (a *Auth) requestForPassword(action string, message *tgbotapi.Message, text
 	_, err := a.bot.Send(msg)
 	if err != nil {
 		return fmt.Errorf("requestForPassword, telegram bot couldn't send message: %v", err)
+	}
+	return nil
+}
+
+func (a *Auth) requestForCountry(message *tgbotapi.Message) error {
+	msg := tgbotapi.NewMessage(message.Chat.ID, "Выберете свою страну и часовой пояс. Это нужно для того, что бы мы понимали когда у вас наступают следующие сутки и могли разделять расходы по дням. Вы сможете изменить эту настройку в будущем")
+	msg.ReplyToMessageID = message.MessageID
+
+	a.waitRegisterMessageWithCountry = msg.ReplyToMessageID + 2
+
+	keyboard := tgbotapi.NewReplyKeyboard(
+		tgbotapi.NewKeyboardButtonRow(
+			tgbotapi.NewKeyboardButton("Belarus (GMT+3)"),
+		),
+		tgbotapi.NewKeyboardButtonRow(
+			tgbotapi.NewKeyboardButton("Russia, Moscow (GMT+3)"),
+		),
+		tgbotapi.NewKeyboardButtonRow(
+			tgbotapi.NewKeyboardButton("Poland (GMT+2)"),
+		),
+		tgbotapi.NewKeyboardButtonRow(
+			tgbotapi.NewKeyboardButton("Ukraine (GMT+3)"),
+		),
+		tgbotapi.NewKeyboardButtonRow(
+			tgbotapi.NewKeyboardButton("Georgia (GMT+4)"),
+		),
+	)
+	msg.ReplyMarkup = keyboard
+
+	_, err := a.bot.Send(msg)
+	if err != nil {
+		return fmt.Errorf("sendMessage, telegram bot couldn't send message: %v", err)
 	}
 	return nil
 }
