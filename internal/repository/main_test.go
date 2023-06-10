@@ -130,7 +130,7 @@ func initialMongo(ctx context.Context, pool *dockertest.Pool) *dockertest.Resour
 		if err != nil {
 			return err
 		}
-		financeRepo = NewFinance(mongoCli)
+		financeRepo = NewMongo(mongoCli)
 		return mongoCli.Ping(ctx, nil)
 	})
 	if err != nil {
