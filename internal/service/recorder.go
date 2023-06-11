@@ -7,8 +7,8 @@ import (
 )
 
 const (
-	monthlyCollection = "2006-01"
-	dailyCollection   = "today"
+	monthlyPeriod = "2006-01"
+	dailyPeriod   = "today"
 )
 
 type Recorder struct {
@@ -22,8 +22,8 @@ func NewRecorder(repo repository.Recorder) *Recorder {
 }
 
 func (f *Recorder) Add(ctx context.Context, entry *model.Entry) error {
-	if err := f.repo.Add(ctx, entry, entry.Date.Format(monthlyCollection)); err != nil {
+	if err := f.repo.Add(ctx, entry, entry.Date.Format(monthlyPeriod)); err != nil {
 		return err
 	}
-	return f.repo.Add(ctx, entry, dailyCollection)
+	return f.repo.Add(ctx, entry, dailyPeriod)
 }

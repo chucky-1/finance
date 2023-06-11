@@ -34,15 +34,15 @@ func (r *Reporter) AddTimezone(timezone int, username string) {
 }
 
 func (r *Reporter) DailyReport(ctx context.Context) (map[string]map[string]float64, error) {
-	users, ok := r.timezones.get(time.Now().UTC().Hour())
-	if !ok {
-		return nil, nil
+	users := r.timezones.getIfTheDayChanges(time.Now().UTC().Hour())
+	if len(users) == 0 {
+		return make(map[string]map[string]float64), nil
 	}
-	reports, err := r.getter.GetByUsers(ctx, users, "expenses", dailyCollection)
+	reports, err := r.getter.GetByUsers(ctx, users, "expenses", dailyPeriod)
 	if err != nil {
 		return nil, err
 	}
-	err = r.cleaner.DeleteByUsers(ctx, users, "expenses", dailyCollection)
+	err = r.cleaner.DeleteByUsers(ctx, users, "expenses", dailyPeriod)
 	if err != nil {
 		return nil, err
 	}
@@ -50,11 +50,11 @@ func (r *Reporter) DailyReport(ctx context.Context) (map[string]map[string]float
 }
 
 func (r *Reporter) MonthlyReport(ctx context.Context) (map[string]map[string]float64, error) {
-	users, ok := r.timezones.get(time.Now().UTC().Hour())
-	if !ok {
-		return nil, nil
+	users := r.timezones.getIfTheDayChanges(time.Now().UTC().Hour())
+	if len(users) == 0 {
+		return make(map[string]map[string]float64), nil
 	}
-	reports, err := r.getter.GetByUsers(ctx, users, "expenses", time.Now().UTC().Add(-time.Hour).Format(monthlyCollection))
+	reports, err := r.getter.GetByUsers(ctx, users, "expenses", time.Now().UTC().Add(24*-time.Hour).Format(monthlyPeriod))
 	if err != nil {
 		return nil, err
 	}
@@ -67,12 +67,22 @@ func (t *timezones) add(key int, value string) {
 	t.timezones[key] = append(t.timezones[key], value)
 }
 
-func (t *timezones) get(key int) ([]string, bool) {
+func (t *timezones) getIfTheDayChanges(hourByUTC int) []string {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
-	value, ok := t.timezones[key]
-	if !ok {
-		return nil, false
+
+	var values []string
+	if hourByUTC >= 12 {
+		v, ok := t.timezones[24-hourByUTC]
+		if ok {
+			values = append(values, v...)
+		}
 	}
-	return value, true
+	if hourByUTC <= 12 {
+		v, ok := t.timezones[-hourByUTC]
+		if ok {
+			values = append(values, v...)
+		}
+	}
+	return values
 }
