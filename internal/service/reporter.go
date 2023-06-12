@@ -16,7 +16,7 @@ type Reporter struct {
 type timezones struct {
 	// key: timezone, value: usernames
 	mu        sync.RWMutex
-	timezones map[int][]string
+	timezones map[time.Duration][]string
 }
 
 func NewReporter(getter repository.Getter, cleaner repository.Cleaner) *Reporter {
@@ -24,17 +24,19 @@ func NewReporter(getter repository.Getter, cleaner repository.Cleaner) *Reporter
 		getter:  getter,
 		cleaner: cleaner,
 		timezones: &timezones{
-			timezones: make(map[int][]string),
+			timezones: make(map[time.Duration][]string),
 		},
 	}
 }
 
-func (r *Reporter) AddTimezone(timezone int, username string) {
+func (r *Reporter) AddTimezone(timezone time.Duration, username string) {
 	r.timezones.add(timezone, username)
 }
 
 func (r *Reporter) DailyReport(ctx context.Context) (map[string]map[string]float64, error) {
-	users := r.timezones.getIfTheDayChanges(time.Now().UTC().Hour())
+	utc := time.Now().UTC()
+	hourPlusMinute := time.Duration(utc.Hour() + utc.Minute())
+	users := r.timezones.getIfTheDayChanges(hourPlusMinute)
 	if len(users) == 0 {
 		return make(map[string]map[string]float64), nil
 	}
@@ -50,7 +52,9 @@ func (r *Reporter) DailyReport(ctx context.Context) (map[string]map[string]float
 }
 
 func (r *Reporter) MonthlyReport(ctx context.Context) (map[string]map[string]float64, error) {
-	users := r.timezones.getIfTheDayChanges(time.Now().UTC().Hour())
+	utc := time.Now().UTC()
+	hourPlusMinute := time.Duration(utc.Hour() + utc.Minute())
+	users := r.timezones.getIfTheDayChanges(hourPlusMinute)
 	if len(users) == 0 {
 		return make(map[string]map[string]float64), nil
 	}
@@ -61,25 +65,25 @@ func (r *Reporter) MonthlyReport(ctx context.Context) (map[string]map[string]flo
 	return reports, nil
 }
 
-func (t *timezones) add(key int, value string) {
+func (t *timezones) add(key time.Duration, value string) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	t.timezones[key] = append(t.timezones[key], value)
 }
 
-func (t *timezones) getIfTheDayChanges(hourByUTC int) []string {
+func (t *timezones) getIfTheDayChanges(tm time.Duration) []string {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 
 	var values []string
-	if hourByUTC >= 12 {
-		v, ok := t.timezones[24-hourByUTC]
+	if tm >= 12*time.Hour {
+		v, ok := t.timezones[24*time.Hour-tm]
 		if ok {
 			values = append(values, v...)
 		}
 	}
-	if hourByUTC <= 12 {
-		v, ok := t.timezones[-hourByUTC]
+	if tm <= 12*time.Hour {
+		v, ok := t.timezones[-tm]
 		if ok {
 			values = append(values, v...)
 		}
