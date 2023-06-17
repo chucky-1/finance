@@ -157,7 +157,7 @@ func TestFinance_GetByUsers(t *testing.T) {
 	users := []string{
 		entry1.User, entry2.User, entry3.User,
 	}
-	entries, err := financeRepo.GetByUsers(ctx, users, "expenses", period)
+	entries, err := financeRepo.GetByUsernames(ctx, users, "expenses", period)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -220,18 +220,18 @@ func TestMongo_DeleteByUsers(t *testing.T) {
 		entry1.User, entry2.User, entry3.User,
 	}
 
-	entries, err := financeRepo.GetByUsers(ctx, users, "expenses", period)
+	entries, err := financeRepo.GetByUsernames(ctx, users, "expenses", period)
 	if err != nil {
 		t.Fatal(err)
 	}
 	require.Equal(t, 3, len(entries))
 
-	err = financeRepo.DeleteByUsers(ctx, users, "expenses", period)
+	err = financeRepo.DeleteByUsernames(ctx, users, "expenses", period)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	entries, err = financeRepo.GetByUsers(ctx, users, "expenses", period)
+	entries, err = financeRepo.GetByUsernames(ctx, users, "expenses", period)
 	if err != nil {
 		t.Fatal(err)
 	}

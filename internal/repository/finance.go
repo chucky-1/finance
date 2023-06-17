@@ -18,11 +18,11 @@ type Recorder interface {
 
 type Getter interface {
 	Get(ctx context.Context, entry *model.Entry, period string) (map[string]float64, error)
-	GetByUsers(ctx context.Context, users []string, kind, period string) (map[string]map[string]float64, error)
+	GetByUsernames(ctx context.Context, usernames []string, kind, period string) (map[string]map[string]float64, error)
 }
 
 type Cleaner interface {
-	DeleteByUsers(ctx context.Context, users []string, kind, period string) error
+	DeleteByUsernames(ctx context.Context, users []string, kind, period string) error
 }
 
 type Mongo struct {
@@ -60,16 +60,16 @@ func (m *Mongo) Get(ctx context.Context, entry *model.Entry, period string) (map
 	return unmarshal(&data), nil
 }
 
-func (m *Mongo) GetByUsers(ctx context.Context, users []string, kind, period string) (map[string]map[string]float64, error) {
+func (m *Mongo) GetByUsernames(ctx context.Context, usernames []string, kind, period string) (map[string]map[string]float64, error) {
 	cursor, err := m.cli.Database(kind).Collection(period).Find(ctx,
-		bson.D{{Key: "user", Value: bson.D{{Key: "$in", Value: users}}}})
+		bson.D{{Key: "user", Value: bson.D{{Key: "$in", Value: usernames}}}})
 	if err != nil {
-		return nil, fmt.Errorf("mongo couldn't Find in GetByUsers method: %v", err)
+		return nil, fmt.Errorf("mongo couldn't Find in GetByUsernames method: %v", err)
 	}
 	defer func(cursor *mongo.Cursor, ctx context.Context) {
 		err = cursor.Close(ctx)
 		if err != nil {
-			logrus.Errorf("mongo couldn't close cursor in GetByUsers method")
+			logrus.Errorf("mongo couldn't close cursor in GetByUsernames method")
 		}
 	}(cursor, ctx)
 
@@ -77,26 +77,26 @@ func (m *Mongo) GetByUsers(ctx context.Context, users []string, kind, period str
 	for cursor.Next(ctx) {
 		var data bson.D
 		if err = cursor.Decode(&data); err != nil {
-			return nil, fmt.Errorf("mongo couldn't Decode in GetByUsers method: %v", err)
+			return nil, fmt.Errorf("mongo couldn't Decode in GetByUsernames method: %v", err)
 		}
 		user, ok := data.Map()["user"]
 		if !ok {
-			logrus.Infof("GetByUsers method: user didn't find in map: %v", data.Map())
+			logrus.Infof("GetByUsernames method: user didn't find in map: %v", data.Map())
 			continue
 		}
 		result[user.(string)] = unmarshal(&data)
 	}
 	if err = cursor.Err(); err != nil {
-		return nil, fmt.Errorf("cursor err in GetByUsers method: %v", err)
+		return nil, fmt.Errorf("cursor err in GetByUsernames method: %v", err)
 	}
 	return result, nil
 }
 
-func (m *Mongo) DeleteByUsers(ctx context.Context, users []string, kind, period string) error {
+func (m *Mongo) DeleteByUsernames(ctx context.Context, users []string, kind, period string) error {
 	_, err := m.cli.Database(kind).Collection(period).DeleteMany(ctx,
 		bson.D{{Key: "user", Value: bson.D{{Key: "$in", Value: users}}}})
 	if err != nil {
-		return fmt.Errorf("mongo could't DeleteMany in DeleteByUsers method %v", err)
+		return fmt.Errorf("mongo could't DeleteMany in DeleteByUsernames method %v", err)
 	}
 	return nil
 }

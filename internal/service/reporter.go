@@ -2,9 +2,10 @@ package service
 
 import (
 	"context"
-	"github.com/chucky-1/finance/internal/repository"
 	"sync"
 	"time"
+
+	"github.com/chucky-1/finance/internal/repository"
 )
 
 type Reporter struct {
@@ -29,40 +30,62 @@ func NewReporter(getter repository.Getter, cleaner repository.Cleaner) *Reporter
 	}
 }
 
+func (r *Reporter) DailyReportsIfDayChanges(ctx context.Context, timeUTC time.Time) (map[string]map[string]float64, error) {
+	usernames := r.timezones.getUsersWhoseDayChanges(timeUTC)
+	if len(usernames) == 0 {
+		return nil, nil
+	}
+	reports, err := r.getter.GetByUsernames(ctx, usernames, "expenses", dailyPeriod)
+	if err != nil {
+		return nil, err
+	}
+	err = r.cleaner.DeleteByUsernames(ctx, usernames, "expenses", dailyPeriod)
+	if err != nil {
+		return nil, err
+	}
+	return reports, nil
+}
+
+func (r *Reporter) MonthlyReportsIfMonthChanges(ctx context.Context, timeUTC time.Time) (map[string]map[string]float64, error) {
+	usernames := r.timezones.getUsersWhoseMonthChanges(timeUTC)
+	if len(usernames) == 0 {
+		return nil, nil
+	}
+	reports, err := r.getter.GetByUsernames(ctx, usernames, "expenses", timeUTC.Add(24*-time.Hour).Format(monthlyPeriod))
+	if err != nil {
+		return nil, err
+	}
+	return reports, nil
+}
+
 func (r *Reporter) AddTimezone(timezone time.Duration, username string) {
 	r.timezones.add(timezone, username)
 }
 
-func (r *Reporter) DailyReport(ctx context.Context) (map[string]map[string]float64, error) {
-	utc := time.Now().UTC()
-	hourPlusMinute := time.Duration(utc.Hour() + utc.Minute())
-	users := r.timezones.getIfTheDayChanges(hourPlusMinute)
-	if len(users) == 0 {
-		return make(map[string]map[string]float64), nil
+// getUsersWhoseDayChanges returns users who have 00:00 local time
+// When by UTC 12:00 the day changes in the time zones +12 and -12
+func (t *timezones) getUsersWhoseDayChanges(timeUTC time.Time) []string {
+	timezone := getTimezoneWhereDayChanges(timeUTC.Hour(), timeUTC.Minute())
+	if timezone.Hours() == 12 {
+		return append(t.get(timezone), t.get(-timezone)...)
 	}
-	reports, err := r.getter.GetByUsers(ctx, users, "expenses", dailyPeriod)
-	if err != nil {
-		return nil, err
-	}
-	err = r.cleaner.DeleteByUsers(ctx, users, "expenses", dailyPeriod)
-	if err != nil {
-		return nil, err
-	}
-	return reports, nil
+	return t.get(timezone)
 }
 
-func (r *Reporter) MonthlyReport(ctx context.Context) (map[string]map[string]float64, error) {
-	utc := time.Now().UTC()
-	hourPlusMinute := time.Duration(utc.Hour() + utc.Minute())
-	users := r.timezones.getIfTheDayChanges(hourPlusMinute)
-	if len(users) == 0 {
-		return make(map[string]map[string]float64), nil
+// getUsersWhoseMonthChanges returns users who have the 1st date
+// When by UTC 12:00 the day changes in time zones +12 and -12, but the dates will be different
+func (t *timezones) getUsersWhoseMonthChanges(timeUTC time.Time) []string {
+	timezone := getTimezoneWhereDayChanges(timeUTC.Hour(), timeUTC.Minute())
+	if timezone.Hours() != 12 && timeUTC.Add(timezone).Day() == 1 {
+		return t.get(timezone)
 	}
-	reports, err := r.getter.GetByUsers(ctx, users, "expenses", time.Now().UTC().Add(24*-time.Hour).Format(monthlyPeriod))
-	if err != nil {
-		return nil, err
+	if timezone.Hours() == 12 && timeUTC.Add(timezone).Day() == 1 {
+		return t.get(timezone)
 	}
-	return reports, nil
+	if timezone.Hours() == 12 && timeUTC.Add(-timezone).Day() == 1 {
+		return t.get(-timezone)
+	}
+	return nil
 }
 
 func (t *timezones) add(key time.Duration, value string) {
@@ -71,22 +94,25 @@ func (t *timezones) add(key time.Duration, value string) {
 	t.timezones[key] = append(t.timezones[key], value)
 }
 
-func (t *timezones) getIfTheDayChanges(tm time.Duration) []string {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
+func (t *timezones) get(key time.Duration) []string {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	users, ok := t.timezones[key]
+	if !ok {
+		return nil
+	}
+	return users
+}
 
-	var values []string
-	if tm >= 12*time.Hour {
-		v, ok := t.timezones[24*time.Hour-tm]
-		if ok {
-			values = append(values, v...)
-		}
+// getTimezoneWhereDayChanges returns the timezone in which the day changes.
+// When by UTC 12:00 the day changes in the timezone +12 and -12, but the function returns only one value +12
+func getTimezoneWhereDayChanges(hourUTC, minuteUTC int) time.Duration {
+	hourPlusMinute := time.Duration(hourUTC)*time.Hour + time.Duration(minuteUTC)*time.Minute
+	if hourPlusMinute >= 12*time.Hour {
+		return 24*time.Hour - hourPlusMinute
 	}
-	if tm <= 12*time.Hour {
-		v, ok := t.timezones[-tm]
-		if ok {
-			values = append(values, v...)
-		}
+	if hourPlusMinute < 12*time.Hour {
+		return -hourPlusMinute
 	}
-	return values
+	return 0
 }
