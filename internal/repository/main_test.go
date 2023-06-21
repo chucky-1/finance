@@ -81,7 +81,7 @@ func initialPostgres(ctx context.Context, pool *dockertest.Pool) *dockertest.Res
 		logrus.Fatalf("Could not connect to database: %s", err)
 	}
 
-	authRepo = NewUserPostgres(postgresPool)
+	authRepo = NewPostgres(postgresPool)
 
 	cmd := exec.Command("flyway",
 		"-user=postgres",

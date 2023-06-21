@@ -36,6 +36,7 @@ type Auth struct {
 	updatesChan chan tgbotapi.Update
 	validator   *validator.Validate
 	auth        service.Authorization
+	reporter    *service.Reporter
 	finish      chan<- *finishData
 
 	waitRegisterMessageWithUsername int
@@ -45,17 +46,18 @@ type Auth struct {
 	waitLoginMessageWithPassword    int
 	username                        string
 	country                         string
-	timezone                        int
+	timezone                        time.Duration
 	password                        string
 }
 
 func NewAuth(bot *tgbotapi.BotAPI, updatesChan chan tgbotapi.Update, validator *validator.Validate, auth service.Authorization,
-	finish chan<- *finishData) *Auth {
+	reporter *service.Reporter, finish chan<- *finishData) *Auth {
 	return &Auth{
 		bot:         bot,
 		updatesChan: updatesChan,
 		validator:   validator,
 		auth:        auth,
+		reporter:    reporter,
 		finish:      finish,
 	}
 }
@@ -124,6 +126,8 @@ func (a *Auth) Consume(ctx context.Context) {
 					}
 					continue
 				}
+
+				a.reporter.AddTimezone(a.timezone, a.username)
 
 				if err = a.sendMessage(update.Message, fmt.Sprintf("Thank you, %s! You have successfully registered", a.username)); err != nil {
 					logrus.Errorf("register error: %v", err)
@@ -244,15 +248,17 @@ func (a *Auth) handlePassword(action string, message *tgbotapi.Message) error {
 }
 
 func (a *Auth) handleCountry(message *tgbotapi.Message) error {
-	a.country = strings.Trim(strings.Split(message.Text, " ")[0], ",")
+	a.country = strings.Split(strings.Trim(strings.Split(message.Text, "(")[0], " "), ",")[0]
 	_, after, _ := strings.Cut(message.Text, "GMT")
 	timezoneString := strings.Trim(after, ")")
-	timezone, err := strconv.ParseInt(timezoneString, 10, 32)
+	timezone, err := strconv.ParseFloat(timezoneString, 32)
 	if err != nil {
 		return fmt.Errorf("handle country couldn't parse int: %v", err)
 	}
-	a.timezone = int(timezone)
-	logrus.Infof("%s chose country: %s and timezone: %d", a.username, a.country, a.timezone)
+	hour := int(timezone)
+	minute := int((timezone - float64(int(timezone))) * 100)
+	a.timezone = time.Duration(hour)*time.Hour + time.Duration(minute)*time.Minute
+	logrus.Infof("%s chose country: %s and timezone: %v", a.username, a.country, a.timezone)
 	return nil
 }
 
@@ -314,6 +320,12 @@ func (a *Auth) requestForCountry(message *tgbotapi.Message) error {
 		),
 		tgbotapi.NewKeyboardButtonRow(
 			tgbotapi.NewKeyboardButton("Georgia (GMT+4)"),
+		),
+		tgbotapi.NewKeyboardButtonRow(
+			tgbotapi.NewKeyboardButton("Sri Lanka (GMT+5.30)"),
+		),
+		tgbotapi.NewKeyboardButtonRow(
+			tgbotapi.NewKeyboardButton("USA, California (GMT-7)"),
 		),
 	)
 	msg.ReplyMarkup = keyboard

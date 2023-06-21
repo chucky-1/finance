@@ -1,8 +1,10 @@
 package model
 
+import "time"
+
 type User struct {
 	Username string
 	Password string
 	Country  string
-	Timezone int
+	Timezone time.Duration
 }

@@ -16,15 +16,15 @@ type Finance struct {
 	bot         *tgbotapi.BotAPI
 	username    string
 	updatesChan chan tgbotapi.Update
-	serv        service.Finance
+	recorder    *service.Recorder
 }
 
-func NewFinance(bot *tgbotapi.BotAPI, username string, updatesChan chan tgbotapi.Update, serv service.Finance) *Finance {
+func NewFinance(bot *tgbotapi.BotAPI, username string, updatesChan chan tgbotapi.Update, recorder *service.Recorder) *Finance {
 	return &Finance{
 		bot:         bot,
 		username:    username,
 		updatesChan: updatesChan,
-		serv:        serv,
+		recorder:    recorder,
 	}
 }
 
@@ -60,8 +60,8 @@ func (f *Finance) Consume(ctx context.Context) {
 			}
 
 			newCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-			err = f.serv.Add(newCtx, &model.Entry{
-				Type: "expenses",
+			err = f.recorder.Add(newCtx, &model.Entry{
+				Kind: "expenses",
 				Item: args[0],
 				User: f.username,
 				Date: time.Now().UTC(),
@@ -80,7 +80,7 @@ func (f *Finance) Consume(ctx context.Context) {
 				continue
 			}
 
-			logrus.Infof("%s added expenses: %s: %f", f.username, args[0], sum)
+			logrus.Infof("%s added expenses: %s: %.2f", f.username, args[0], sum)
 		}
 	}
 }

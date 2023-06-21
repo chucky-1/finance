@@ -154,6 +154,7 @@ func tickerFromBeginningOrMiddleOfHour(ctx context.Context) *time.Ticker {
 }
 
 func durationBeforeCreateTicker(timeUTC time.Time) time.Duration {
+	// TODO incorrect work
 	return timeUTC.Truncate(30 * time.Minute).Add(30 * time.Minute).Sub(timeUTC)
 }
 

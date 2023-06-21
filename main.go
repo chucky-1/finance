@@ -71,14 +71,16 @@ func main() {
 
 	myValidator := validator.New()
 
-	userRepository := repository.NewUserPostgres(conn)
-	financeRepository := repository.NewFinance(client)
-	authService := service.NewAuth(userRepository, cfg.AuthSalt)
-	financeService := service.NewFinance(financeRepository)
+	postgresRepository := repository.NewPostgres(conn)
+	mongoRepository := repository.NewMongo(client)
+
+	authService := service.NewAuth(postgresRepository, cfg.AuthSalt)
+	recorderService := service.NewRecorder(mongoRepository)
+	reporterService := service.NewReporter(mongoRepository, mongoRepository)
 
 	tgUsersChan := make(chan producer.TGUser)
 
-	hub := consumer.NewHub(mainBot, updatesChan, myValidator, authService, financeService, tgUsersChan)
+	hub := consumer.NewHub(mainBot, updatesChan, myValidator, authService, recorderService, reporterService, tgUsersChan)
 	go hub.Consume(ctx)
 
 	dailyReporterBot, err := tgbotapi.NewBotAPI(cfg.TGDailyReporterBotToken)
@@ -97,7 +99,7 @@ func main() {
 	monthlyUpdate.Timeout = cfg.TGMonthlyTimeout
 	monthlyUpdatesChan := monthlyReporterBot.GetUpdatesChan(monthlyUpdate)
 
-	reporterProducer := producer.NewReporter(dailyReporterBot, monthlyReporterBot, dailyUpdatesChan, monthlyUpdatesChan, tgUsersChan)
+	reporterProducer := producer.NewReporter(dailyReporterBot, monthlyReporterBot, dailyUpdatesChan, monthlyUpdatesChan, reporterService, tgUsersChan)
 	go reporterProducer.Produce(ctx)
 
 	logrus.Infof("app has started")

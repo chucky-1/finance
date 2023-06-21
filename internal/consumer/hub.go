@@ -14,21 +14,23 @@ type Hub struct {
 	bot             *tgbotapi.BotAPI
 	updatesChan     tgbotapi.UpdatesChannel
 	validator       *validator.Validate
-	authService     service.Authorization
-	financeService  service.Finance
+	auth            service.Authorization
+	recorder        *service.Recorder
+	reporter        *service.Reporter
 	authChannels    map[int64]chan tgbotapi.Update
 	financeChannels map[int64]chan tgbotapi.Update
 	tgUsersCh       chan<- producer.TGUser
 }
 
 func NewHub(bot *tgbotapi.BotAPI, updatesChan tgbotapi.UpdatesChannel, validator *validator.Validate,
-	authService service.Authorization, financeService service.Finance, tgUsersCh chan producer.TGUser) *Hub {
+	auth service.Authorization, recorder *service.Recorder, reporter *service.Reporter, tgUsersCh chan producer.TGUser) *Hub {
 	return &Hub{
 		bot:             bot,
 		updatesChan:     updatesChan,
 		validator:       validator,
-		authService:     authService,
-		financeService:  financeService,
+		auth:            auth,
+		recorder:        recorder,
+		reporter:        reporter,
 		authChannels:    make(map[int64]chan tgbotapi.Update),
 		financeChannels: make(map[int64]chan tgbotapi.Update),
 		tgUsersCh:       tgUsersCh,
@@ -93,7 +95,7 @@ func (h *Hub) startAuthConsumer(ctx context.Context, chatID int64) (chan tgbotap
 	finishChan := make(chan *finishData)
 	newUpdatesChan := make(chan tgbotapi.Update)
 	h.authChannels[chatID] = newUpdatesChan
-	authConsumer := NewAuth(h.bot, newUpdatesChan, h.validator, h.authService, finishChan)
+	authConsumer := NewAuth(h.bot, newUpdatesChan, h.validator, h.auth, h.reporter, finishChan)
 	newCtx, _ := context.WithCancel(ctx)
 	go authConsumer.Consume(newCtx)
 	return newUpdatesChan, finishChan
@@ -108,11 +110,12 @@ func (h *Hub) listenFinish(ctx context.Context, finishChan chan *finishData) {
 		delete(h.authChannels, data.chatID)
 		financeChan := make(chan tgbotapi.Update)
 		h.financeChannels[data.chatID] = financeChan
-		go NewFinance(h.bot, data.username, financeChan, h.financeService).Consume(ctx)
+		go NewFinance(h.bot, data.username, financeChan, h.recorder).Consume(ctx)
 		h.tgUsersCh <- producer.TGUser{
 			TGUsername: data.tgUsername,
 			Username:   data.username,
 		}
+		logrus.Infof("goroutine in hub for user %s stopped", data.username)
 	}
 }
 

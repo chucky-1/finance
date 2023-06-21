@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"github.com/sirupsen/logrus"
 	"sync"
 	"time"
 
@@ -91,6 +92,7 @@ func (t *timezones) getUsersWhoseMonthChanges(timeUTC time.Time) []string {
 func (t *timezones) add(key time.Duration, value string) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
+	logrus.Infof("service timezone: add %s by %v", value, key)
 	t.timezones[key] = append(t.timezones[key], value)
 }
 
