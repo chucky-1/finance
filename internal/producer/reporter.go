@@ -54,7 +54,10 @@ func NewReporter(dailyReporterBot, monthlyReporterBot *tgbotapi.BotAPI, dailySub
 }
 
 func (r *Reporter) Produce(ctx context.Context) {
-	logrus.Info("reporter producer started")
+	logrus.Info("reporter producer started produce")
+
+	go r.listen(ctx)
+
 	t := tickerFromBeginningOrMiddleOfHour(ctx)
 	defer t.Stop()
 	timeUTC := time.Now().UTC()
@@ -71,6 +74,17 @@ func (r *Reporter) Produce(ctx context.Context) {
 			timeUTC = time.Now().UTC()
 			logrus.Infof("reporter producer: ticker triggered in: %v", timeUTC)
 			r.sendAllReports(ctx, timeUTC)
+		}
+	}
+}
+
+func (r *Reporter) listen(ctx context.Context) {
+	logrus.Info("reporter producer started listen")
+	for {
+		select {
+		case <-ctx.Done():
+			logrus.Infof("reporter producer stopped listen: %v", ctx.Done())
+			return
 		case tgUser := <-r.tgUsersChan:
 			logrus.Infof("reporter producer received message to wait for the user's subscriptions: %v", tgUser)
 			r.expectedUsersToSubscribe[tgUser.TGUsername] = tgUser.Username
@@ -154,7 +168,6 @@ func tickerFromBeginningOrMiddleOfHour(ctx context.Context) *time.Ticker {
 }
 
 func durationBeforeCreateTicker(timeUTC time.Time) time.Duration {
-	// TODO incorrect work
 	return timeUTC.Truncate(30 * time.Minute).Add(30 * time.Minute).Sub(timeUTC)
 }
 
