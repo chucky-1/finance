@@ -91,7 +91,7 @@ func (a *Auth) Consume(ctx context.Context) {
 				}
 
 				if err := a.requestForPassword(register, update.Message,
-					fmt.Sprintf("Enter your password. Maximum %d characters", passwordMaxLength)); err != nil {
+					fmt.Sprintf("Введите пароль. Максимум %d символов", passwordMaxLength)); err != nil {
 					logrus.Errorf("register error: %v", err)
 					continue
 				}
@@ -120,7 +120,7 @@ func (a *Auth) Consume(ctx context.Context) {
 				if !success {
 					logrus.Errorf("register error: user with username: %s already exist", a.username)
 					if err = a.requestForUsername(register, update.Message,
-						fmt.Sprintf("User with username: %s already exist. Try again! Enter your username", a.username)); err != nil {
+						fmt.Sprintf("Имя пользователя: %s уже существует. Попробуйте ещё раз! Введите ваше имя пользователя", a.username)); err != nil {
 						logrus.Errorf("register error: %v", err)
 						continue
 					}
@@ -129,7 +129,7 @@ func (a *Auth) Consume(ctx context.Context) {
 
 				a.reporter.AddTimezone(a.timezone, a.username)
 
-				if err = a.sendMessage(update.Message, fmt.Sprintf("Thank you, %s! You have successfully registered", a.username)); err != nil {
+				if err = a.sendMessage(update.Message, fmt.Sprintf("Спасибо, %s! Вы успешно зарегистрировались", a.username)); err != nil {
 					logrus.Errorf("register error: %v", err)
 					continue
 				}
@@ -149,7 +149,7 @@ func (a *Auth) Consume(ctx context.Context) {
 					logrus.Errorf("login error: %v", err)
 					continue
 				}
-				if err := a.requestForPassword(login, update.Message, "Enter your password"); err != nil {
+				if err := a.requestForPassword(login, update.Message, "Введите пароль"); err != nil {
 					logrus.Errorf("login error: %v", err)
 					continue
 				}
@@ -175,14 +175,14 @@ func (a *Auth) Consume(ctx context.Context) {
 				cancel()
 				if !ok {
 					logrus.Errorf("login error: invalid username: %s or password: %s", a.username, a.password)
-					if err = a.requestForUsername(login, update.Message, "You inputted invalid username or password. Try again! Enter your username"); err != nil {
+					if err = a.requestForUsername(login, update.Message, "Вы ввели неверное имя пользователя или пароль. Попробуйте ещё раз! Введите ваше имя пользователя"); err != nil {
 						logrus.Errorf("login error: %v", err)
 						continue
 					}
 					continue
 				}
 
-				if err = a.sendMessage(update.Message, fmt.Sprintf("%s, you are authorized!", a.username)); err != nil {
+				if err = a.sendMessage(update.Message, fmt.Sprintf("%s, вы авторизованы!", a.username)); err != nil {
 					logrus.Errorf("login error: %v", err)
 					continue
 				}
@@ -201,16 +201,15 @@ func (a *Auth) Consume(ctx context.Context) {
 				switch update.Message.Command() {
 				case register:
 					logrus.Info("register command started executing")
-					registerText := fmt.Sprintf("Enter your username. Minimum %d, maximum %d characters", usernameMinLength, usernameMaxLength)
-					if err := a.requestForUsername(register, update.Message, registerText); err != nil {
+					if err := a.requestForUsername(register, update.Message,
+						fmt.Sprintf("Введите имя пользователя. Минимум %d, максимум %d символов", usernameMinLength, usernameMaxLength)); err != nil {
 						logrus.Errorf("register error: %v", err)
 						continue
 					}
 					continue
 				case login:
 					logrus.Info("login command started executing")
-					loginText := fmt.Sprintf("Enter your username")
-					if err := a.requestForUsername(login, update.Message, loginText); err != nil {
+					if err := a.requestForUsername(login, update.Message, "Введите имя пользователя"); err != nil {
 						logrus.Errorf("login error: %v", err)
 						continue
 					}
@@ -224,7 +223,7 @@ func (a *Auth) Consume(ctx context.Context) {
 func (a *Auth) handleUsername(action string, message *tgbotapi.Message) error {
 	a.username = message.Text
 	if !a.validate(a.username, fmt.Sprintf("min=%d,max=%d", usernameMinLength, usernameMaxLength)) {
-		err := a.requestForUsername(action, message, "You entered the wrong username. Try again!")
+		err := a.requestForUsername(action, message, "Вы ввели некорректное имя пользователя. Попробуйте ещё раз!")
 		if err != nil {
 			return err
 		}
@@ -237,7 +236,7 @@ func (a *Auth) handleUsername(action string, message *tgbotapi.Message) error {
 func (a *Auth) handlePassword(action string, message *tgbotapi.Message) error {
 	a.password = message.Text
 	if !a.validate(a.password, fmt.Sprintf("max=%d", passwordMaxLength)) {
-		err := a.requestForPassword(action, message, fmt.Sprintf("%s, you entered the wrong password. Try again!", a.username))
+		err := a.requestForPassword(action, message, fmt.Sprintf("%s, вы ввели некорректный пароль. Попробуйте ещё раз!", a.username))
 		if err != nil {
 			return err
 		}

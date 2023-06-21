@@ -57,7 +57,7 @@ func (h *Hub) Consume(ctx context.Context) {
 					logrus.Infof("received message in hub consumer to register or login from chat %d", update.Message.Chat.ID)
 					if h.authorized(update.Message.Chat.ID) {
 						logrus.Errorf("register/login error: user with chat %d already is authorized", update.Message.Chat.ID)
-						if err := h.sendMessage(update.Message, "you are already authorized"); err != nil {
+						if err := h.sendMessage(update.Message, "Вы уже авторизованы!"); err != nil {
 							logrus.Errorf("register/login error: %v", err)
 							continue
 						}

@@ -40,7 +40,7 @@ func (f *Finance) Consume(ctx context.Context) {
 			args := strings.Split(update.Message.Text, " ")
 			if len(args) != 2 {
 				logrus.Errorf("finance consumer received invalid message: %s", update.Message.Text)
-				err := f.sendMessage(update.Message, fmt.Sprintf("%s, I can't process it. You only have to enter two words separated by a space. Expense item and amount", f.username))
+				err := f.sendMessage(update.Message, fmt.Sprintf("%s, мы не можем обработать ваш запрос. Вы должны ввести только 2 параметра разделённых пробелом: статью расходов и сумму", f.username))
 				if err != nil {
 					logrus.Errorf("finance consumer send message error: %v", err)
 					continue
@@ -51,7 +51,7 @@ func (f *Finance) Consume(ctx context.Context) {
 			sum, err := strconv.ParseFloat(args[1], 64)
 			if err != nil {
 				logrus.Errorf("finance consumer couldn't parseFloat: %v", err)
-				err = f.sendMessage(update.Message, fmt.Sprintf("%s, the second argument must be a number", f.username))
+				err = f.sendMessage(update.Message, fmt.Sprintf("%s, второй параметр должен быть числом", f.username))
 				if err != nil {
 					logrus.Errorf("finance consumer send message error: %v", err)
 					continue
@@ -74,7 +74,7 @@ func (f *Finance) Consume(ctx context.Context) {
 			}
 			cancel()
 
-			err = f.sendMessage(update.Message, fmt.Sprintf("Added expenses %s: %.2f", args[0], sum))
+			err = f.sendMessage(update.Message, fmt.Sprintf("Добавлены расходы %s: %.2f", args[0], sum))
 			if err != nil {
 				logrus.Errorf("finance consumer send message error: %v", err)
 				continue
