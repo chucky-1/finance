@@ -55,35 +55,16 @@ func NewReporter(dailyReporterBot, monthlyReporterBot *tgbotapi.BotAPI, dailySub
 
 func (r *Reporter) Produce(ctx context.Context) {
 	logrus.Info("reporter producer started produce")
-
-	go r.listen(ctx)
-
-	t := tickerFromBeginningOrMiddleOfHour(ctx)
-	defer t.Stop()
-	timeUTC := time.Now().UTC()
-	logrus.Infof("reporter produce created ticker from beginning of hour: %v", timeUTC)
-
-	go r.sendAllReports(ctx, timeUTC)
-
-	for {
-		select {
-		case <-ctx.Done():
-			logrus.Infof("reporter producer stopped: %v", ctx.Err())
-			return
-		case <-t.C:
-			timeUTC = time.Now().UTC()
-			logrus.Infof("reporter producer: ticker triggered in: %v", timeUTC)
-			r.sendAllReports(ctx, timeUTC)
-		}
-	}
+	go r.waitSubscribers(ctx)
+	go r.waitTimeToSendReports(ctx)
 }
 
-func (r *Reporter) listen(ctx context.Context) {
-	logrus.Info("reporter producer started listen")
+func (r *Reporter) waitSubscribers(ctx context.Context) {
+	logrus.Info("reporter producer started wait subscribers")
 	for {
 		select {
 		case <-ctx.Done():
-			logrus.Infof("reporter producer stopped listen: %v", ctx.Done())
+			logrus.Infof("reporter producer stopped wait subscribers: %v", ctx.Err())
 			return
 		case tgUser := <-r.tgUsersChan:
 			logrus.Infof("reporter producer received message to wait for the user's subscriptions: %v", tgUser)
@@ -106,6 +87,28 @@ func (r *Reporter) listen(ctx context.Context) {
 			}
 			r.monthlyChatsByUser[username] = update.Message.Chat.ID
 			logrus.Infof("%s subscribed to monthly reports", username)
+		}
+	}
+}
+
+func (r *Reporter) waitTimeToSendReports(ctx context.Context) {
+	logrus.Info("reporter producer started wait time to send reports")
+	t := tickerFromBeginningOrMiddleOfHour(ctx)
+	defer t.Stop()
+	timeUTC := time.Now().UTC()
+	logrus.Infof("reporter produce created ticker from beginning of hour: %v", timeUTC)
+
+	go r.sendAllReports(ctx, timeUTC)
+
+	for {
+		select {
+		case <-ctx.Done():
+			logrus.Infof("reporter producer stopped wait time to send reports: %v", ctx.Err())
+			return
+		case <-t.C:
+			timeUTC = time.Now().UTC()
+			logrus.Infof("reporter producer: ticker triggered in: %v", timeUTC)
+			r.sendAllReports(ctx, timeUTC)
 		}
 	}
 }
