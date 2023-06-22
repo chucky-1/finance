@@ -10,6 +10,24 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+const (
+	start = "start"
+)
+
+var welcomeMessage = "Привет! Я могу помочь вам считать расходы. Каждый раз, когда вы тратите деньги, " +
+	"просто отправляйте мне сообщение в формате:\n" +
+	"Кофе 3.50\n" +
+	"Вы должны отправить мне только 2 слова, точнее одно слово и одну цифру, через пробел, иначе я не смогу обработать сообщение и буду ругаться :)\n" +
+	"Я буду суммировать ваши расходы, а в конце дня, в 00:00 по вашему местному времени, отправлю отчёт за весь день.\n" +
+	"Так же, 1 числа каждого месяца я буду отправлять вам расходы за месяц.\n" +
+	"Что бы вы всегда имели быстрый доступ к нужным отчётам, я буду отправлять в отдельные каналы ежедневные и ежемесячные отчёты. " +
+	"А этот канал будет использоваться только для записи расходов.\n" +
+	"Соответственно, нужно будет подписаться ещё на 2 канала, но как это сделать я расскажу после регистрации.\n" +
+	"А сейчас, если вы готовы, нажмите\n" +
+	"/register\n" +
+	"Если у вас уже есть аккаунт, нажмите\n" +
+	"/login"
+
 type Hub struct {
 	bot             *tgbotapi.BotAPI
 	updatesChan     tgbotapi.UpdatesChannel
@@ -74,6 +92,13 @@ func (h *Hub) Consume(ctx context.Context) {
 						continue
 					}
 					ch <- update
+					continue
+				case start:
+					_, err := h.bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, welcomeMessage))
+					if err != nil {
+						logrus.Errorf("hub consumer couldn't send start message: %v", err)
+						continue
+					}
 					continue
 				default:
 					logrus.Infof("unknown command: %s", update.Message.Text)
