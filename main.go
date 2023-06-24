@@ -14,7 +14,6 @@ import (
 	"github.com/go-playground/validator/v10"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/jackc/pgx/v4/pgxpool"
-	"github.com/joho/godotenv"
 	"github.com/sirupsen/logrus"
 
 	"github.com/chucky-1/finance/internal/config"
@@ -29,9 +28,9 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	if err := godotenv.Load(); err != nil {
-		logrus.Fatal("No .env file found")
-	}
+	//if err := godotenv.Load(); err != nil {
+	//	logrus.Fatal("No .env file found")
+	//}
 
 	cfg := config.Config{}
 	if err := env.Parse(&cfg); err != nil {
