@@ -2,6 +2,9 @@ package main
 
 import (
 	"context"
+	"github.com/chucky-1/finance/internal/producer"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 	"os"
 	"os/signal"
 	"syscall"
@@ -43,22 +46,61 @@ func main() {
 		logrus.Fatalf("couldn't ping database: %v", err)
 	}
 
-	bot, err := tgbotapi.NewBotAPI(cfg.TgToken)
+	client, err := mongo.Connect(ctx, options.Client().ApplyURI(cfg.MongoURI))
+	if err != nil {
+		logrus.Fatalf("couldn't connect to mongo: %v", err)
+	}
+	err = client.Ping(ctx, nil)
+	if err != nil {
+		logrus.Fatalf("failed ping to mongo: %v", err)
+	}
+	defer func() {
+		if err = client.Disconnect(context.TODO()); err != nil {
+			logrus.Fatalf("couldn't disconnect to mongo: %v", err)
+		}
+	}()
+
+	mainBot, err := tgbotapi.NewBotAPI(cfg.TGMainBotToken)
 	if err != nil {
 		logrus.Fatal(err)
 	}
 	//bot.Debug = true
 	u := tgbotapi.NewUpdate(0)
-	u.Timeout = cfg.TgTimeout
-	updatesChan := bot.GetUpdatesChan(u)
+	u.Timeout = cfg.TGMainTimeout
+	updatesChan := mainBot.GetUpdatesChan(u)
 
 	myValidator := validator.New()
 
-	userRepository := repository.NewUserPostgres(conn)
-	authService := service.NewAuth(userRepository, cfg.AuthSalt)
+	postgresRepository := repository.NewPostgres(conn)
+	mongoRepository := repository.NewMongo(client)
 
-	tgBot := consumer.NewHub(bot, updatesChan, myValidator, authService)
-	go tgBot.Consume(ctx)
+	authService := service.NewAuth(postgresRepository, cfg.AuthSalt)
+	recorderService := service.NewRecorder(mongoRepository)
+	reporterService := service.NewReporter(mongoRepository, mongoRepository)
+
+	tgUsersChan := make(chan producer.TGUser)
+
+	hub := consumer.NewHub(mainBot, updatesChan, myValidator, authService, recorderService, reporterService, tgUsersChan)
+	go hub.Consume(ctx)
+
+	dailyReporterBot, err := tgbotapi.NewBotAPI(cfg.TGDailyReporterBotToken)
+	if err != nil {
+		logrus.Fatal(err)
+	}
+	dailyUpdate := tgbotapi.NewUpdate(0)
+	dailyUpdate.Timeout = cfg.TGDailyTimeout
+	dailyUpdatesChan := dailyReporterBot.GetUpdatesChan(dailyUpdate)
+
+	monthlyReporterBot, err := tgbotapi.NewBotAPI(cfg.TGMonthlyReporterBotToken)
+	if err != nil {
+		logrus.Fatal(err)
+	}
+	monthlyUpdate := tgbotapi.NewUpdate(0)
+	monthlyUpdate.Timeout = cfg.TGMonthlyTimeout
+	monthlyUpdatesChan := monthlyReporterBot.GetUpdatesChan(monthlyUpdate)
+
+	reporterProducer := producer.NewReporter(dailyReporterBot, monthlyReporterBot, dailyUpdatesChan, monthlyUpdatesChan, reporterService, tgUsersChan)
+	go reporterProducer.Produce(ctx)
 
 	logrus.Infof("app has started")
 
