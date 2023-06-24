@@ -74,7 +74,7 @@ func (f *Finance) Consume(ctx context.Context) {
 			}
 			cancel()
 
-			err = f.sendMessage(update.Message, fmt.Sprintf("Добавлены расходы %s: %.2f", args[0], sum))
+			err = f.sendMessage(update.Message, fmt.Sprintf("Добавлены расходы\n%s: %.2f", args[0], sum))
 			if err != nil {
 				logrus.Errorf("finance consumer send message error: %v", err)
 				continue

@@ -179,9 +179,9 @@ func convertToTGReports(reports map[string]map[string]float64, timeUTC time.Time
 	var reportTitle string
 	switch period {
 	case dayPeriod:
-		reportTitle = fmt.Sprintf("%d %s\n", day, month.String())
+		reportTitle = fmt.Sprintf("%d %s\n", day, translateWithDeclension(month.String()))
 	case monthPeriod:
-		reportTitle = fmt.Sprintf("%s %d\n", month.String(), year)
+		reportTitle = fmt.Sprintf("%s %d\n", translate(month.String()), year)
 	}
 	tgReports := make(map[string]string)
 	for user, entry := range reports {
@@ -192,4 +192,64 @@ func convertToTGReports(reports map[string]map[string]float64, timeUTC time.Time
 		tgReports[user] = report
 	}
 	return tgReports
+}
+
+func translate(month string) string {
+	switch month {
+	case "January":
+		return "Январь"
+	case "February":
+		return "Февраль"
+	case "March":
+		return "Март"
+	case "April":
+		return "Апрель"
+	case "May":
+		return "Май"
+	case "June":
+		return "Июнь"
+	case "July":
+		return "Июль"
+	case "August":
+		return "Август"
+	case "September":
+		return "Сентябрь"
+	case "October":
+		return "Октябрь"
+	case "November":
+		return "Ноябрь"
+	case "December":
+		return "Декабрь"
+	}
+	return ""
+}
+
+func translateWithDeclension(month string) string {
+	switch month {
+	case "January":
+		return "Января"
+	case "February":
+		return "Февраля"
+	case "March":
+		return "Марта"
+	case "April":
+		return "Апреля"
+	case "May":
+		return "Мая"
+	case "June":
+		return "Июня"
+	case "July":
+		return "Июля"
+	case "August":
+		return "Августа"
+	case "September":
+		return "Сентября"
+	case "October":
+		return "Октября"
+	case "November":
+		return "Ноября"
+	case "December":
+		return "Декабря"
+	}
+	return ""
 }

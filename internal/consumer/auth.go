@@ -25,6 +25,23 @@ const (
 	passwordMaxLength = 15
 )
 
+var explainingSubscriptionMessage = "Если вы хотите получать отчёты, отправьте команду \"start\" следующим ботам\n\n" +
+	"Для получения ежедневных отчётов\n" +
+	"@daily_finance_reporter_bot\n" +
+	"Для получения ежемесячных отчётов\n" +
+	"@monthly_finance_reporter_bot\n\n" +
+	"Эти боты не смогут с вами коммуницировать, они предназначены ТОЛЬКО для отчётов. Вся коммуникация с приложением осуществляется через этот чат\n"
+
+var explainingCommunicationMessage = "Для того что бы записать расходы, вы должны отправить сообщение в формате\n\n" +
+	"Кофе 3.5\n\n" +
+	"Вы должны отправить мне только 2 слова, точнее одно слово и одну цифру, через пробел, иначе я не смогу обработать сообщение и буду ругаться :)\n" +
+	"Приятного пользования :)"
+
+var chooseCountryMessage = "Выберете свою страну и часовой пояс. " +
+	"Это нужно для того, что бы мы понимали когда у вас наступают следующие сутки и могли разделять расходы по дням. " +
+	"Вы сможете изменить эту настройку в будущем.\n\n" +
+	"Пока мы работаем в бета версии, страну можно выбрать только из списка предложенных."
+
 type finishData struct {
 	username   string
 	chatID     int64
@@ -134,6 +151,14 @@ func (a *Auth) Consume(ctx context.Context) {
 					continue
 				}
 
+				if err = a.sendMessage(update.Message, explainingSubscriptionMessage); err != nil {
+					logrus.Errorf("register error: coldn't send explanation subscribe message: %v", err)
+				}
+
+				if err = a.sendMessage(update.Message, explainingCommunicationMessage); err != nil {
+					logrus.Errorf("register error: coldn't send explanation comminicate message: %v", err)
+				}
+
 				logrus.Infof("user %s successful registered", a.username)
 				logrus.Infof("auth consumer for user %s stopped", a.username)
 				a.finish <- &finishData{
@@ -185,6 +210,14 @@ func (a *Auth) Consume(ctx context.Context) {
 				if err = a.sendMessage(update.Message, fmt.Sprintf("%s, вы авторизованы!", a.username)); err != nil {
 					logrus.Errorf("login error: %v", err)
 					continue
+				}
+
+				if err = a.sendMessage(update.Message, explainingSubscriptionMessage); err != nil {
+					logrus.Errorf("login error: coldn't send explanation subscribe message: %v", err)
+				}
+
+				if err = a.sendMessage(update.Message, explainingCommunicationMessage); err != nil {
+					logrus.Errorf("login error: coldn't send explanation communicate message: %v", err)
 				}
 
 				logrus.Infof("user %s is authorized", a.username)
@@ -299,7 +332,7 @@ func (a *Auth) requestForPassword(action string, message *tgbotapi.Message, text
 }
 
 func (a *Auth) requestForCountry(message *tgbotapi.Message) error {
-	msg := tgbotapi.NewMessage(message.Chat.ID, "Выберете свою страну и часовой пояс. Это нужно для того, что бы мы понимали когда у вас наступают следующие сутки и могли разделять расходы по дням. Вы сможете изменить эту настройку в будущем")
+	msg := tgbotapi.NewMessage(message.Chat.ID, chooseCountryMessage)
 	msg.ReplyToMessageID = message.MessageID
 
 	a.waitRegisterMessageWithCountry = msg.ReplyToMessageID + 2
