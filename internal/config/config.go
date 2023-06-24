@@ -3,8 +3,10 @@ package config
 type Config struct {
 	TGMainBotToken            string `env:"TG_MAIN_BOT_TOKEN"`
 	TGMainTimeout             int    `env:"TG_MAIN_TIMEOUT"`
+	TGNameDailyReporterBot    string `env:"TG_NAME_DAILY_REPORTER_BOT"`
 	TGDailyReporterBotToken   string `env:"TG_DAILY_REPORTER_BOT_TOKEN"`
 	TGDailyTimeout            int    `env:"TG_DAILY_TIMEOUT"`
+	TGNameMonthlyReporterBot  string `env:"TG_NAME_MONTHLY_REPORTER_BOT"`
 	TGMonthlyReporterBotToken string `env:"TG_MONTHLY_REPORTER_BOT_TOKEN"`
 	TGMonthlyTimeout          int    `env:"TG_MONTHLY_TIMEOUT"`
 	PostgresDB                string `env:"POSTGRES_DB"`

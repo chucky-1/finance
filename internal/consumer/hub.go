@@ -27,29 +27,34 @@ var welcomeMessage = "Привет! Если вы хотите лучше кон
 	"/login"
 
 type Hub struct {
-	bot             *tgbotapi.BotAPI
-	updatesChan     tgbotapi.UpdatesChannel
-	validator       *validator.Validate
-	auth            service.Authorization
-	recorder        *service.Recorder
-	reporter        *service.Reporter
-	authChannels    map[int64]chan tgbotapi.Update
-	financeChannels map[int64]chan tgbotapi.Update
-	tgUsersCh       chan<- producer.TGUser
+	bot                      *tgbotapi.BotAPI
+	updatesChan              tgbotapi.UpdatesChannel
+	validator                *validator.Validate
+	auth                     service.Authorization
+	recorder                 *service.Recorder
+	reporter                 *service.Reporter
+	authChannels             map[int64]chan tgbotapi.Update
+	financeChannels          map[int64]chan tgbotapi.Update
+	tgUsersCh                chan<- producer.TGUser
+	tgNameDailyReporterBot   string
+	tgNameMonthlyReporterBot string
 }
 
 func NewHub(bot *tgbotapi.BotAPI, updatesChan tgbotapi.UpdatesChannel, validator *validator.Validate,
-	auth service.Authorization, recorder *service.Recorder, reporter *service.Reporter, tgUsersCh chan producer.TGUser) *Hub {
+	auth service.Authorization, recorder *service.Recorder, reporter *service.Reporter, tgUsersCh chan producer.TGUser,
+	TGNameDailyReporterBot, TGNameMonthlyReporterBot string) *Hub {
 	return &Hub{
-		bot:             bot,
-		updatesChan:     updatesChan,
-		validator:       validator,
-		auth:            auth,
-		recorder:        recorder,
-		reporter:        reporter,
-		authChannels:    make(map[int64]chan tgbotapi.Update),
-		financeChannels: make(map[int64]chan tgbotapi.Update),
-		tgUsersCh:       tgUsersCh,
+		bot:                      bot,
+		updatesChan:              updatesChan,
+		validator:                validator,
+		auth:                     auth,
+		recorder:                 recorder,
+		reporter:                 reporter,
+		authChannels:             make(map[int64]chan tgbotapi.Update),
+		financeChannels:          make(map[int64]chan tgbotapi.Update),
+		tgUsersCh:                tgUsersCh,
+		tgNameDailyReporterBot:   TGNameDailyReporterBot,
+		tgNameMonthlyReporterBot: TGNameMonthlyReporterBot,
 	}
 }
 
@@ -118,7 +123,7 @@ func (h *Hub) startAuthConsumer(ctx context.Context, chatID int64) (chan tgbotap
 	finishChan := make(chan *finishData)
 	newUpdatesChan := make(chan tgbotapi.Update)
 	h.authChannels[chatID] = newUpdatesChan
-	authConsumer := NewAuth(h.bot, newUpdatesChan, h.validator, h.auth, h.reporter, finishChan)
+	authConsumer := NewAuth(h.bot, newUpdatesChan, h.validator, h.auth, h.reporter, finishChan, h.tgNameDailyReporterBot, h.tgNameMonthlyReporterBot)
 	newCtx, _ := context.WithCancel(ctx)
 	go authConsumer.Consume(newCtx)
 	return newUpdatesChan, finishChan

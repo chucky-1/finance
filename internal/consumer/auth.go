@@ -27,9 +27,9 @@ const (
 
 var explainingSubscriptionMessage = "Если вы хотите получать отчёты, отправьте команду \"start\" следующим ботам\n\n" +
 	"Для получения ежедневных отчётов\n" +
-	"@daily_finance_reporter_bot\n" +
+	"%s\n" +
 	"Для получения ежемесячных отчётов\n" +
-	"@monthly_finance_reporter_bot\n\n" +
+	"%s\n\n" +
 	"Эти боты не смогут с вами коммуницировать, они предназначены ТОЛЬКО для отчётов. Вся коммуникация с приложением осуществляется через этот чат\n"
 
 var explainingCommunicationMessage = "Для того что бы записать расходы, вы должны отправить сообщение в формате\n\n" +
@@ -49,12 +49,14 @@ type finishData struct {
 }
 
 type Auth struct {
-	bot         *tgbotapi.BotAPI
-	updatesChan chan tgbotapi.Update
-	validator   *validator.Validate
-	auth        service.Authorization
-	reporter    *service.Reporter
-	finish      chan<- *finishData
+	bot                      *tgbotapi.BotAPI
+	updatesChan              chan tgbotapi.Update
+	validator                *validator.Validate
+	auth                     service.Authorization
+	reporter                 *service.Reporter
+	finish                   chan<- *finishData
+	tgNameDailyReporterBot   string
+	tgNameMonthlyReporterBot string
 
 	waitRegisterMessageWithUsername int
 	waitRegisterMessageWithCountry  int
@@ -68,14 +70,16 @@ type Auth struct {
 }
 
 func NewAuth(bot *tgbotapi.BotAPI, updatesChan chan tgbotapi.Update, validator *validator.Validate, auth service.Authorization,
-	reporter *service.Reporter, finish chan<- *finishData) *Auth {
+	reporter *service.Reporter, finish chan<- *finishData, TGNameDailyReporterBot, TGNameMonthlyReporterBot string) *Auth {
 	return &Auth{
-		bot:         bot,
-		updatesChan: updatesChan,
-		validator:   validator,
-		auth:        auth,
-		reporter:    reporter,
-		finish:      finish,
+		bot:                      bot,
+		updatesChan:              updatesChan,
+		validator:                validator,
+		auth:                     auth,
+		reporter:                 reporter,
+		finish:                   finish,
+		tgNameDailyReporterBot:   TGNameDailyReporterBot,
+		tgNameMonthlyReporterBot: TGNameMonthlyReporterBot,
 	}
 }
 
@@ -151,7 +155,7 @@ func (a *Auth) Consume(ctx context.Context) {
 					continue
 				}
 
-				if err = a.sendMessage(update.Message, explainingSubscriptionMessage); err != nil {
+				if err = a.sendMessage(update.Message, fmt.Sprintf(explainingSubscriptionMessage, a.tgNameDailyReporterBot, a.tgNameMonthlyReporterBot)); err != nil {
 					logrus.Errorf("register error: coldn't send explanation subscribe message: %v", err)
 				}
 
@@ -212,7 +216,7 @@ func (a *Auth) Consume(ctx context.Context) {
 					continue
 				}
 
-				if err = a.sendMessage(update.Message, explainingSubscriptionMessage); err != nil {
+				if err = a.sendMessage(update.Message, fmt.Sprintf(explainingSubscriptionMessage, a.tgNameDailyReporterBot, a.tgNameMonthlyReporterBot)); err != nil {
 					logrus.Errorf("login error: coldn't send explanation subscribe message: %v", err)
 				}
 

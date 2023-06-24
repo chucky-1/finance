@@ -79,7 +79,8 @@ func main() {
 
 	tgUsersChan := make(chan producer.TGUser)
 
-	hub := consumer.NewHub(mainBot, updatesChan, myValidator, authService, recorderService, reporterService, tgUsersChan)
+	hub := consumer.NewHub(mainBot, updatesChan, myValidator, authService, recorderService, reporterService, tgUsersChan,
+		cfg.TGNameDailyReporterBot, cfg.TGNameMonthlyReporterBot)
 	go hub.Consume(ctx)
 
 	dailyReporterBot, err := tgbotapi.NewBotAPI(cfg.TGDailyReporterBotToken)
