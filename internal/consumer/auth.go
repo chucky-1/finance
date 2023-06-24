@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"github.com/chucky-1/finance/internal/model"
 	"github.com/chucky-1/finance/internal/service"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-playground/validator/v10"
@@ -23,28 +25,56 @@ const (
 	passwordMaxLength = 15
 )
 
+var explainingSubscriptionMessage = "Если вы хотите получать отчёты, отправьте команду \"start\" следующим ботам\n\n" +
+	"Для получения ежедневных отчётов\n" +
+	"@daily_finance_reporter_bot\n" +
+	"Для получения ежемесячных отчётов\n" +
+	"@monthly_finance_reporter_bot\n\n" +
+	"Эти боты не смогут с вами коммуницировать, они предназначены ТОЛЬКО для отчётов. Вся коммуникация с приложением осуществляется через этот чат\n"
+
+var explainingCommunicationMessage = "Для того что бы записать расходы, вы должны отправить сообщение в формате\n\n" +
+	"Кофе 3.5\n\n" +
+	"Вы должны отправить мне только 2 слова, точнее одно слово и одну цифру, через пробел, иначе я не смогу обработать сообщение и буду ругаться :)\n" +
+	"Приятного пользования :)"
+
+var chooseCountryMessage = "Выберете свою страну и часовой пояс. " +
+	"Это нужно для того, что бы мы понимали когда у вас наступают следующие сутки и могли разделять расходы по дням. " +
+	"Вы сможете изменить эту настройку в будущем.\n\n" +
+	"Пока мы работаем в бета версии, страну можно выбрать только из списка предложенных."
+
+type finishData struct {
+	username   string
+	chatID     int64
+	tgUsername string
+}
+
 type Auth struct {
 	bot         *tgbotapi.BotAPI
-	updatesChan tgbotapi.UpdatesChannel
+	updatesChan chan tgbotapi.Update
 	validator   *validator.Validate
 	auth        service.Authorization
-	finish      chan<- int64
+	reporter    *service.Reporter
+	finish      chan<- *finishData
 
 	waitRegisterMessageWithUsername int
+	waitRegisterMessageWithCountry  int
 	waitRegisterMessageWithPassword int
 	waitLoginMessageWithUsername    int
 	waitLoginMessageWithPassword    int
 	username                        string
+	country                         string
+	timezone                        time.Duration
 	password                        string
 }
 
-func NewAuth(bot *tgbotapi.BotAPI, updatesChan tgbotapi.UpdatesChannel, validator *validator.Validate, auth service.Authorization,
-	finish chan<- int64) *Auth {
+func NewAuth(bot *tgbotapi.BotAPI, updatesChan chan tgbotapi.Update, validator *validator.Validate, auth service.Authorization,
+	reporter *service.Reporter, finish chan<- *finishData) *Auth {
 	return &Auth{
 		bot:         bot,
 		updatesChan: updatesChan,
 		validator:   validator,
 		auth:        auth,
+		reporter:    reporter,
 		finish:      finish,
 	}
 }
@@ -64,8 +94,21 @@ func (a *Auth) Consume(ctx context.Context) {
 					logrus.Errorf("register error: %v", err)
 					continue
 				}
+
+				if err := a.requestForCountry(update.Message); err != nil {
+					logrus.Errorf("register error: %v", err)
+					continue
+				}
+			}
+
+			if !update.Message.IsCommand() && update.Message.MessageID == a.waitRegisterMessageWithCountry {
+				if err := a.handleCountry(update.Message); err != nil {
+					logrus.Errorf("register error: %v", err)
+					continue
+				}
+
 				if err := a.requestForPassword(register, update.Message,
-					fmt.Sprintf("Enter your password. Maximum %d characters", passwordMaxLength)); err != nil {
+					fmt.Sprintf("Введите пароль. Максимум %d символов", passwordMaxLength)); err != nil {
 					logrus.Errorf("register error: %v", err)
 					continue
 				}
@@ -82,6 +125,8 @@ func (a *Auth) Consume(ctx context.Context) {
 				success, err := a.auth.CreateUser(newCtx, &model.User{
 					Username: a.username,
 					Password: a.password,
+					Country:  a.country,
+					Timezone: a.timezone,
 				})
 				if err != nil {
 					logrus.Errorf("register error: %v", err)
@@ -92,21 +137,35 @@ func (a *Auth) Consume(ctx context.Context) {
 				if !success {
 					logrus.Errorf("register error: user with username: %s already exist", a.username)
 					if err = a.requestForUsername(register, update.Message,
-						fmt.Sprintf("User with username: %s already exist. Try again! Enter your username", a.username)); err != nil {
+						fmt.Sprintf("Имя пользователя: %s уже существует. Попробуйте ещё раз! Введите ваше имя пользователя", a.username)); err != nil {
 						logrus.Errorf("register error: %v", err)
 						continue
 					}
 					continue
 				}
 
-				if err = a.sendMessage(update.Message, fmt.Sprintf("Thank you, %s! You have successfully registered", a.username)); err != nil {
+				a.reporter.AddTimezone(a.timezone, a.username)
+
+				if err = a.sendMessage(update.Message, fmt.Sprintf("Спасибо, %s! Вы успешно зарегистрировались", a.username)); err != nil {
 					logrus.Errorf("register error: %v", err)
 					continue
 				}
 
+				if err = a.sendMessage(update.Message, explainingSubscriptionMessage); err != nil {
+					logrus.Errorf("register error: coldn't send explanation subscribe message: %v", err)
+				}
+
+				if err = a.sendMessage(update.Message, explainingCommunicationMessage); err != nil {
+					logrus.Errorf("register error: coldn't send explanation comminicate message: %v", err)
+				}
+
 				logrus.Infof("user %s successful registered", a.username)
 				logrus.Infof("auth consumer for user %s stopped", a.username)
-				a.finish <- update.Message.Chat.ID
+				a.finish <- &finishData{
+					username:   a.username,
+					chatID:     update.Message.Chat.ID,
+					tgUsername: update.SentFrom().UserName,
+				}
 				return
 			}
 
@@ -115,7 +174,7 @@ func (a *Auth) Consume(ctx context.Context) {
 					logrus.Errorf("login error: %v", err)
 					continue
 				}
-				if err := a.requestForPassword(login, update.Message, "Enter your password"); err != nil {
+				if err := a.requestForPassword(login, update.Message, "Введите пароль"); err != nil {
 					logrus.Errorf("login error: %v", err)
 					continue
 				}
@@ -141,21 +200,33 @@ func (a *Auth) Consume(ctx context.Context) {
 				cancel()
 				if !ok {
 					logrus.Errorf("login error: invalid username: %s or password: %s", a.username, a.password)
-					if err = a.requestForUsername(login, update.Message, "You inputted invalid username or password. Try again! Enter your username"); err != nil {
+					if err = a.requestForUsername(login, update.Message, "Вы ввели неверное имя пользователя или пароль. Попробуйте ещё раз! Введите ваше имя пользователя"); err != nil {
 						logrus.Errorf("login error: %v", err)
 						continue
 					}
 					continue
 				}
 
-				if err = a.sendMessage(update.Message, fmt.Sprintf("%s, you are authorized!", a.username)); err != nil {
+				if err = a.sendMessage(update.Message, fmt.Sprintf("%s, вы авторизованы!", a.username)); err != nil {
 					logrus.Errorf("login error: %v", err)
 					continue
 				}
 
+				if err = a.sendMessage(update.Message, explainingSubscriptionMessage); err != nil {
+					logrus.Errorf("login error: coldn't send explanation subscribe message: %v", err)
+				}
+
+				if err = a.sendMessage(update.Message, explainingCommunicationMessage); err != nil {
+					logrus.Errorf("login error: coldn't send explanation communicate message: %v", err)
+				}
+
 				logrus.Infof("user %s is authorized", a.username)
 				logrus.Infof("auth consumer for user %s stopped", a.username)
-				a.finish <- update.Message.Chat.ID
+				a.finish <- &finishData{
+					username:   a.username,
+					chatID:     update.Message.Chat.ID,
+					tgUsername: update.SentFrom().UserName,
+				}
 				return
 			}
 
@@ -163,16 +234,15 @@ func (a *Auth) Consume(ctx context.Context) {
 				switch update.Message.Command() {
 				case register:
 					logrus.Info("register command started executing")
-					registerText := fmt.Sprintf("Enter your username. Minimum %d, maximum %d characters", usernameMinLength, usernameMaxLength)
-					if err := a.requestForUsername(register, update.Message, registerText); err != nil {
+					if err := a.requestForUsername(register, update.Message,
+						fmt.Sprintf("Введите имя пользователя. Минимум %d, максимум %d символов", usernameMinLength, usernameMaxLength)); err != nil {
 						logrus.Errorf("register error: %v", err)
 						continue
 					}
 					continue
 				case login:
 					logrus.Info("login command started executing")
-					loginText := fmt.Sprintf("Enter your username")
-					if err := a.requestForUsername(login, update.Message, loginText); err != nil {
+					if err := a.requestForUsername(login, update.Message, "Введите имя пользователя"); err != nil {
 						logrus.Errorf("login error: %v", err)
 						continue
 					}
@@ -186,7 +256,7 @@ func (a *Auth) Consume(ctx context.Context) {
 func (a *Auth) handleUsername(action string, message *tgbotapi.Message) error {
 	a.username = message.Text
 	if !a.validate(a.username, fmt.Sprintf("min=%d,max=%d", usernameMinLength, usernameMaxLength)) {
-		err := a.requestForUsername(action, message, "You entered the wrong username. Try again!")
+		err := a.requestForUsername(action, message, "Вы ввели некорректное имя пользователя. Попробуйте ещё раз!")
 		if err != nil {
 			return err
 		}
@@ -199,13 +269,28 @@ func (a *Auth) handleUsername(action string, message *tgbotapi.Message) error {
 func (a *Auth) handlePassword(action string, message *tgbotapi.Message) error {
 	a.password = message.Text
 	if !a.validate(a.password, fmt.Sprintf("max=%d", passwordMaxLength)) {
-		err := a.requestForPassword(action, message, fmt.Sprintf("%s, you entered the wrong password. Try again!", a.username))
+		err := a.requestForPassword(action, message, fmt.Sprintf("%s, вы ввели некорректный пароль. Попробуйте ещё раз!", a.username))
 		if err != nil {
 			return err
 		}
 		return fmt.Errorf("user %s entered the wrong password: %s", a.username, a.password)
 	}
 	logrus.Infof("%s, user %s entered password: %s", action, a.username, a.password)
+	return nil
+}
+
+func (a *Auth) handleCountry(message *tgbotapi.Message) error {
+	a.country = strings.Split(strings.Trim(strings.Split(message.Text, "(")[0], " "), ",")[0]
+	_, after, _ := strings.Cut(message.Text, "GMT")
+	timezoneString := strings.Trim(after, ")")
+	timezone, err := strconv.ParseFloat(timezoneString, 32)
+	if err != nil {
+		return fmt.Errorf("handle country couldn't parse int: %v", err)
+	}
+	hour := int(timezone)
+	minute := int((timezone - float64(int(timezone))) * 100)
+	a.timezone = time.Duration(hour)*time.Hour + time.Duration(minute)*time.Minute
+	logrus.Infof("%s chose country: %s and timezone: %v", a.username, a.country, a.timezone)
 	return nil
 }
 
@@ -230,6 +315,7 @@ func (a *Auth) requestForUsername(action string, message *tgbotapi.Message, text
 func (a *Auth) requestForPassword(action string, message *tgbotapi.Message, text string) error {
 	msg := tgbotapi.NewMessage(message.Chat.ID, text)
 	msg.ReplyToMessageID = message.MessageID
+	msg.ReplyMarkup = tgbotapi.NewRemoveKeyboard(true)
 
 	switch action {
 	case register:
@@ -241,6 +327,44 @@ func (a *Auth) requestForPassword(action string, message *tgbotapi.Message, text
 	_, err := a.bot.Send(msg)
 	if err != nil {
 		return fmt.Errorf("requestForPassword, telegram bot couldn't send message: %v", err)
+	}
+	return nil
+}
+
+func (a *Auth) requestForCountry(message *tgbotapi.Message) error {
+	msg := tgbotapi.NewMessage(message.Chat.ID, chooseCountryMessage)
+	msg.ReplyToMessageID = message.MessageID
+
+	a.waitRegisterMessageWithCountry = msg.ReplyToMessageID + 2
+
+	keyboard := tgbotapi.NewReplyKeyboard(
+		tgbotapi.NewKeyboardButtonRow(
+			tgbotapi.NewKeyboardButton("Belarus (GMT+3)"),
+		),
+		tgbotapi.NewKeyboardButtonRow(
+			tgbotapi.NewKeyboardButton("Russia, Moscow (GMT+3)"),
+		),
+		tgbotapi.NewKeyboardButtonRow(
+			tgbotapi.NewKeyboardButton("Poland (GMT+2)"),
+		),
+		tgbotapi.NewKeyboardButtonRow(
+			tgbotapi.NewKeyboardButton("Ukraine (GMT+3)"),
+		),
+		tgbotapi.NewKeyboardButtonRow(
+			tgbotapi.NewKeyboardButton("Georgia (GMT+4)"),
+		),
+		tgbotapi.NewKeyboardButtonRow(
+			tgbotapi.NewKeyboardButton("Sri Lanka (GMT+5.30)"),
+		),
+		tgbotapi.NewKeyboardButtonRow(
+			tgbotapi.NewKeyboardButton("USA, California (GMT-7)"),
+		),
+	)
+	msg.ReplyMarkup = keyboard
+
+	_, err := a.bot.Send(msg)
+	if err != nil {
+		return fmt.Errorf("sendMessage, telegram bot couldn't send message: %v", err)
 	}
 	return nil
 }
