@@ -5,6 +5,8 @@ import (
 	"github.com/chucky-1/finance/internal/producer"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
+	"io"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -101,6 +103,20 @@ func main() {
 
 	reporterProducer := producer.NewReporter(dailyReporterBot, monthlyReporterBot, dailyUpdatesChan, monthlyUpdatesChan, reporterService, tgUsersChan)
 	go reporterProducer.Produce(ctx)
+
+	// http server to check health
+	http.HandleFunc("/", func(writer http.ResponseWriter, request *http.Request) {
+		_, err = io.WriteString(writer, "")
+		if err != nil {
+			logrus.Fatalf("couldn't write response: %v", err)
+		}
+	})
+	go func() {
+		err = http.ListenAndServe(":8080", nil)
+		if err != nil {
+			logrus.Fatalf("couldn't listen and serve: %v", err)
+		}
+	}()
 
 	logrus.Infof("app has started")
 
