@@ -62,10 +62,12 @@ func (f *Finance) Consume(ctx context.Context) {
 			newCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 			err = f.recorder.Add(newCtx, &model.Entry{
 				Kind: "expenses",
-				Item: args[0],
 				User: f.username,
 				Date: time.Now().UTC(),
-				Sum:  sum,
+				Category: &model.Category{
+					Name:   args[0],
+					Amount: sum,
+				},
 			})
 			if err != nil {
 				logrus.Errorf("finance consumer couldn't Add: %v", err)

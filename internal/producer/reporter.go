@@ -6,6 +6,8 @@ import (
 	"github.com/chucky-1/finance/internal/service"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/sirupsen/logrus"
+	"sort"
+	"strings"
 	"time"
 )
 
@@ -29,7 +31,6 @@ type Reporter struct {
 
 	// receiving from hub consumer
 	// key: tgUserName, value: username
-	// TODO clear map after subscription
 	tgUsersChan              <-chan TGUser
 	expectedUsersToSubscribe map[string]string
 
@@ -139,19 +140,31 @@ func (r *Reporter) sendReports(ctx context.Context, timeUTC time.Time, period st
 	}
 	tgReports := convertToTGReports(reports, timeUTC, period)
 	for user, report := range tgReports {
-		if err = r.sendReport(user, report); err != nil {
+		if err = r.sendReport(user, report, period); err != nil {
 			logrus.Error(err)
 		}
 	}
 	return nil
 }
 
-func (r *Reporter) sendReport(user, report string) error {
-	chatID, ok := r.dailyChatsByUser[user]
-	if !ok {
-		logrus.Infof("couldn't send a report because don't have a chat with user, user didn't subscribe: %s", user)
-		return nil
+func (r *Reporter) sendReport(user, report, period string) error {
+	var (
+		chatID int64
+		ok     bool
+	)
+	switch period {
+	case dayPeriod:
+		chatID, ok = r.dailyChatsByUser[user]
+		if !ok {
+			return fmt.Errorf("couldn't send a report because don't have a chat with user, user didn't subscribe on daily reports: %s", user)
+		}
+	case monthPeriod:
+		chatID, ok = r.monthlyChatsByUser[user]
+		if !ok {
+			return fmt.Errorf("couldn't send a report because don't have a chat with user, user didn't subscribe on monthly reports: %s", user)
+		}
 	}
+
 	message := tgbotapi.NewMessage(chatID, report)
 	_, err := r.dailyReporterBot.Send(message)
 	if err != nil {
@@ -176,22 +189,36 @@ func durationBeforeCreateTicker(timeUTC time.Time) time.Duration {
 
 func convertToTGReports(reports map[string]map[string]float64, timeUTC time.Time, period string) map[string]string {
 	year, month, day := timeUTC.Add(-time.Hour).Date()
-	var reportTitle string
+	var title string
 	switch period {
 	case dayPeriod:
-		reportTitle = fmt.Sprintf("%d %s\n", day, translateWithDeclension(month.String()))
+		title = fmt.Sprintf("%d %s\n", day, translateWithDeclension(month.String()))
 	case monthPeriod:
-		reportTitle = fmt.Sprintf("%s %d\n", translate(month.String()), year)
+		title = fmt.Sprintf("%s %d\n", translate(month.String()), year)
 	}
 	tgReports := make(map[string]string)
-	for user, entry := range reports {
-		report := reportTitle
-		for item, sum := range entry {
-			report += fmt.Sprintf("%s - %.2f\n", item, sum)
-		}
-		tgReports[user] = report
+	for user, categories := range reports {
+		tgReports[user] = convertToTGReport(title, categories)
 	}
 	return tgReports
+}
+
+func convertToTGReport(title string, categories map[string]float64) string {
+	sortedCategories := make([]string, len(categories))
+	i := 0
+	for category := range categories {
+		sortedCategories[i] = category
+		i++
+	}
+	sort.Strings(sortedCategories)
+
+	report := title
+	var total float64
+	for _, category := range sortedCategories {
+		report += fmt.Sprintf("%s - %.2f\n", strings.TrimSuffix(category, ".Amount"), categories[category])
+		total += categories[category]
+	}
+	return fmt.Sprintf("%s\nИтого - %.2f", report, total)
 }
 
 func translate(month string) string {
