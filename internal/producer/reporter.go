@@ -31,7 +31,6 @@ type Reporter struct {
 
 	// receiving from hub consumer
 	// key: tgUserName, value: username
-	// TODO clear map after subscription
 	tgUsersChan              <-chan TGUser
 	expectedUsersToSubscribe map[string]string
 
@@ -141,19 +140,31 @@ func (r *Reporter) sendReports(ctx context.Context, timeUTC time.Time, period st
 	}
 	tgReports := convertToTGReports(reports, timeUTC, period)
 	for user, report := range tgReports {
-		if err = r.sendReport(user, report); err != nil {
+		if err = r.sendReport(user, report, period); err != nil {
 			logrus.Error(err)
 		}
 	}
 	return nil
 }
 
-func (r *Reporter) sendReport(user, report string) error {
-	chatID, ok := r.dailyChatsByUser[user]
-	if !ok {
-		logrus.Infof("couldn't send a report because don't have a chat with user, user didn't subscribe: %s", user)
-		return nil
+func (r *Reporter) sendReport(user, report, period string) error {
+	var (
+		chatID int64
+		ok     bool
+	)
+	switch period {
+	case dayPeriod:
+		chatID, ok = r.dailyChatsByUser[user]
+		if !ok {
+			return fmt.Errorf("couldn't send a report because don't have a chat with user, user didn't subscribe on daily reports: %s", user)
+		}
+	case monthPeriod:
+		chatID, ok = r.monthlyChatsByUser[user]
+		if !ok {
+			return fmt.Errorf("couldn't send a report because don't have a chat with user, user didn't subscribe on monthly reports: %s", user)
+		}
 	}
+
 	message := tgbotapi.NewMessage(chatID, report)
 	_, err := r.dailyReporterBot.Send(message)
 	if err != nil {
