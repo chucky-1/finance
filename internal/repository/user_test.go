@@ -31,11 +31,10 @@ func TestUserPostgres_CreateGet(t *testing.T) {
 		Country:  "Belarus",
 		Timezone: 3 * time.Hour,
 	}
-	success, err := authRepo.Create(ctx, &user)
+	err := authRepo.Create(ctx, &user)
 	if err != nil {
 		t.Fatal(err)
 	}
-	require.Equal(t, true, success)
 
 	u, err := authRepo.Get(ctx, user.Username)
 
@@ -59,11 +58,10 @@ func TestUserPostgres_CreateGetTimezoneWith30Minute(t *testing.T) {
 		Country:  "Belarus",
 		Timezone: 3*time.Hour + 30*time.Minute,
 	}
-	success, err := authRepo.Create(ctx, &user)
+	err := authRepo.Create(ctx, &user)
 	if err != nil {
 		t.Fatal(err)
 	}
-	require.Equal(t, true, success)
 
 	u, err := authRepo.Get(ctx, user.Username)
 
@@ -87,15 +85,11 @@ func TestUserPostgres_CreateSetDuplicate(t *testing.T) {
 		Country:  "Belarus",
 		Timezone: 3 * time.Hour,
 	}
-	success, err := authRepo.Create(ctx, &user)
+	err := authRepo.Create(ctx, &user)
 	if err != nil {
 		t.Fatal(err)
 	}
-	require.Equal(t, true, success)
 
-	success, err = authRepo.Create(ctx, &user)
-	if err != nil {
-		t.Fatal(err)
-	}
-	require.Equal(t, false, success)
+	err = authRepo.Create(ctx, &user)
+	require.Error(t, DuplicateUserErr)
 }

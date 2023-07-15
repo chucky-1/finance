@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/chucky-1/finance/internal/model"
+	"github.com/chucky-1/finance/internal/repository"
 	"github.com/chucky-1/finance/internal/service"
 	"strconv"
 	"strings"
@@ -126,27 +127,28 @@ func (a *Auth) Consume(ctx context.Context) {
 				}
 
 				newCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-				success, err := a.auth.CreateUser(newCtx, &model.User{
+				err := a.auth.Register(newCtx, &model.User{
 					Username: a.username,
 					Password: a.password,
 					Country:  a.country,
 					Timezone: a.timezone,
 				})
-				if err != nil {
+				if err != nil && err != repository.DuplicateUserErr {
 					logrus.Errorf("register error: %v", err)
 					cancel()
 					continue
-				}
-				cancel()
-				if !success {
+				} else if err == repository.DuplicateUserErr {
 					logrus.Errorf("register error: user with username: %s already exist", a.username)
 					if err = a.requestForUsername(register, update.Message,
 						fmt.Sprintf("Имя пользователя: %s уже существует. Попробуйте ещё раз! Введите ваше имя пользователя", a.username)); err != nil {
 						logrus.Errorf("register error: %v", err)
+						cancel()
 						continue
 					}
+					cancel()
 					continue
 				}
+				cancel()
 
 				a.reporter.AddTimezone(a.timezone, a.username)
 
@@ -192,24 +194,31 @@ func (a *Auth) Consume(ctx context.Context) {
 				}
 
 				newCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-				ok, err := a.auth.Login(newCtx, &model.User{
-					Username: a.username,
-					Password: a.password,
-				})
-				if err != nil {
+				user, err := a.auth.Login(newCtx, a.username, a.password)
+				if err != nil && err != service.UserNotFoundErr && err != service.WrongPasswordErr {
 					logrus.Errorf("login error: %v", err)
+					cancel()
+					continue
+				} else if err == service.UserNotFoundErr {
+					if err = a.requestForUsername(login, update.Message, "Пользователь с таким именем не найден. Попробуйте ещё раз! Введите имя пользователя"); err != nil {
+						logrus.Errorf("login error: %v", err)
+						cancel()
+						continue
+					}
+					cancel()
+					continue
+				} else if err == service.WrongPasswordErr {
+					if err = a.requestForUsername(login, update.Message, "Вы ввели неверное имя пользователя или пароль. Попробуйте ещё раз! Введите ваше имя пользователя"); err != nil {
+						logrus.Errorf("login error: %v", err)
+						cancel()
+						continue
+					}
 					cancel()
 					continue
 				}
 				cancel()
-				if !ok {
-					logrus.Errorf("login error: invalid username: %s or password: %s", a.username, a.password)
-					if err = a.requestForUsername(login, update.Message, "Вы ввели неверное имя пользователя или пароль. Попробуйте ещё раз! Введите ваше имя пользователя"); err != nil {
-						logrus.Errorf("login error: %v", err)
-						continue
-					}
-					continue
-				}
+
+				a.reporter.AddTimezone(user.Timezone, user.Username)
 
 				if err = a.sendMessage(update.Message, fmt.Sprintf("%s, вы авторизованы!", a.username)); err != nil {
 					logrus.Errorf("login error: %v", err)

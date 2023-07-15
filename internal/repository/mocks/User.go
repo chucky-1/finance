@@ -15,27 +15,17 @@ type User struct {
 }
 
 // Create provides a mock function with given fields: ctx, user
-func (_m *User) Create(ctx context.Context, user *model.User) (bool, error) {
+func (_m *User) Create(ctx context.Context, user *model.User) error {
 	ret := _m.Called(ctx, user)
 
-	var r0 bool
-	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, *model.User) (bool, error)); ok {
-		return rf(ctx, user)
-	}
-	if rf, ok := ret.Get(0).(func(context.Context, *model.User) bool); ok {
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, *model.User) error); ok {
 		r0 = rf(ctx, user)
 	} else {
-		r0 = ret.Get(0).(bool)
+		r0 = ret.Error(0)
 	}
 
-	if rf, ok := ret.Get(1).(func(context.Context, *model.User) error); ok {
-		r1 = rf(ctx, user)
-	} else {
-		r1 = ret.Error(1)
-	}
-
-	return r0, r1
+	return r0
 }
 
 // Get provides a mock function with given fields: ctx, username
