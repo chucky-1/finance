@@ -2,16 +2,19 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/chucky-1/finance/internal/model"
 	"github.com/jackc/pgx/v4"
 	"github.com/jackc/pgx/v4/pgxpool"
 )
 
+var DuplicateUserErr = errors.New("user with this username already exists")
+
 //go:generate mockery --name=User
 
 type User interface {
-	Create(ctx context.Context, user *model.User) (bool, error)
+	Create(ctx context.Context, user *model.User) error
 	Get(ctx context.Context, username string) (*model.User, error)
 }
 
@@ -25,16 +28,16 @@ func NewPostgres(conn *pgxpool.Pool) *Postgres {
 	}
 }
 
-func (u *Postgres) Create(ctx context.Context, user *model.User) (bool, error) {
+func (u *Postgres) Create(ctx context.Context, user *model.User) error {
 	query := `INSERT INTO finance.users (username, password, country, timezone) VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING`
 	commandTag, err := u.conn.Exec(ctx, query, user.Username, user.Password, user.Country, user.Timezone)
 	if err != nil {
-		return false, fmt.Errorf("repository.User, create user error: %v", err)
+		return fmt.Errorf("repository.User, create user error: %v", err)
 	}
 	if commandTag.RowsAffected() != 1 {
-		return false, nil
+		return DuplicateUserErr
 	}
-	return true, nil
+	return nil
 }
 
 func (u *Postgres) Get(ctx context.Context, username string) (*model.User, error) {

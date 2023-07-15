@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/chucky-1/finance/internal/model"
+	"github.com/chucky-1/finance/internal/repository"
 	"github.com/chucky-1/finance/internal/service"
 	"strconv"
 	"strings"
@@ -126,27 +127,28 @@ func (a *Auth) Consume(ctx context.Context) {
 				}
 
 				newCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-				success, err := a.auth.Register(newCtx, &model.User{
+				err := a.auth.Register(newCtx, &model.User{
 					Username: a.username,
 					Password: a.password,
 					Country:  a.country,
 					Timezone: a.timezone,
 				})
-				if err != nil {
+				if err != nil && err != repository.DuplicateUserErr {
 					logrus.Errorf("register error: %v", err)
 					cancel()
 					continue
-				}
-				cancel()
-				if !success {
+				} else if err == repository.DuplicateUserErr {
 					logrus.Errorf("register error: user with username: %s already exist", a.username)
 					if err = a.requestForUsername(register, update.Message,
 						fmt.Sprintf("Имя пользователя: %s уже существует. Попробуйте ещё раз! Введите ваше имя пользователя", a.username)); err != nil {
 						logrus.Errorf("register error: %v", err)
+						cancel()
 						continue
 					}
+					cancel()
 					continue
 				}
+				cancel()
 
 				a.reporter.AddTimezone(a.timezone, a.username)
 

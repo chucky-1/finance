@@ -15,7 +15,7 @@ var (
 )
 
 type Authorization interface {
-	Register(ctx context.Context, user *model.User) (bool, error)
+	Register(ctx context.Context, user *model.User) error
 	Login(ctx context.Context, username, password string) (*model.User, error)
 }
 
@@ -31,7 +31,7 @@ func NewAuth(repo repository.User, salt string) *Auth {
 	}
 }
 
-func (a *Auth) Register(ctx context.Context, user *model.User) (bool, error) {
+func (a *Auth) Register(ctx context.Context, user *model.User) error {
 	user.Password = a.generatePassword(user.Password)
 	return a.repo.Create(ctx, user)
 }
