@@ -29,11 +29,11 @@ func NewFinance(bot *tgbotapi.BotAPI, username string, updatesChan chan tgbotapi
 }
 
 func (f *Finance) Consume(ctx context.Context) {
-	logrus.Info("finance consumer started")
+	logrus.Debugf("finance consumer started")
 	for {
 		select {
 		case <-ctx.Done():
-			logrus.Infof("finance consumer stopped: %v", ctx.Err())
+			logrus.Debugf("finance consumer stopped: %v", ctx.Err())
 			return
 		case update := <-f.updatesChan:
 			logrus.Debugf("received message in finance consumer from username: %s", f.username)

@@ -85,12 +85,12 @@ func NewAuth(bot *tgbotapi.BotAPI, updatesChan chan tgbotapi.Update, validator *
 }
 
 func (a *Auth) Consume(ctx context.Context) {
-	logrus.Infof("auth consumer started consuming")
+	logrus.Debugf("auth consumer started consuming")
 
 	for {
 		select {
 		case <-ctx.Done():
-			logrus.Infof("auth consumer for user %s stopped: %v", a.username, ctx.Err())
+			logrus.Debugf("auth consumer for user %s stopped: %v", a.username, ctx.Err())
 			return
 
 		case update := <-a.updatesChan:
@@ -252,8 +252,8 @@ func (a *Auth) Consume(ctx context.Context) {
 					logrus.Errorf("login error: coldn't send explanation communicate message: %v", err)
 				}
 
-				logrus.Debug("user %s is authorized", a.username)
-				logrus.Debug("auth consumer for user %s stopped", a.username)
+				logrus.Debugf("user %s is authorized", a.username)
+				logrus.Debugf("auth consumer for user %s stopped", a.username)
 				a.finish <- &finishData{
 					username:   a.username,
 					chatID:     update.Message.Chat.ID,
