@@ -75,9 +75,9 @@ func (h *Hub) Consume(ctx context.Context) {
 			if update.Message.IsCommand() {
 				switch update.Message.Command() {
 				case register, login:
-					logrus.Infof("received message in hub consumer to register or login from chat %d", update.Message.Chat.ID)
+					logrus.Debugf("received message in hub consumer to register or login from chat %d", update.Message.Chat.ID)
 					if h.authorized(update.Message.Chat.ID) {
-						logrus.Errorf("register/login error: user with chat %d already is authorized", update.Message.Chat.ID)
+						logrus.Debugf("register/login error: user with chat %d already is authorized", update.Message.Chat.ID)
 						if err := h.sendMessage(update.Message, "Вы уже авторизованы!"); err != nil {
 							logrus.Errorf("register/login error: %v", err)
 							continue
@@ -88,7 +88,7 @@ func (h *Hub) Consume(ctx context.Context) {
 					ch, ok := h.authChannels[update.Message.Chat.ID]
 					if !ok {
 						// first touch with the user
-						logrus.Infof("first touch with the user with chat id %d", update.Message.Chat.ID)
+						logrus.Debugf("first touch with the user with chat id %d", update.Message.Chat.ID)
 						newUpdatesChan, finishChan := h.startAuthConsumer(ctx, update.Message.Chat.ID)
 						newUpdatesChan <- update
 						go h.listenFinish(ctx, finishChan)
@@ -104,7 +104,7 @@ func (h *Hub) Consume(ctx context.Context) {
 					}
 					continue
 				default:
-					logrus.Infof("unknown command: %s", update.Message.Text)
+					logrus.Debugf("unknown command: %s", update.Message.Text)
 					continue
 				}
 			}
@@ -114,7 +114,7 @@ func (h *Hub) Consume(ctx context.Context) {
 				authCh <- update
 				continue
 			}
-			logrus.Infof("recieved message: %s", update.Message.Text)
+			logrus.Debugf("recieved message: %s", update.Message.Text)
 		}
 	}
 }
@@ -124,8 +124,7 @@ func (h *Hub) startAuthConsumer(ctx context.Context, chatID int64) (chan tgbotap
 	newUpdatesChan := make(chan tgbotapi.Update)
 	h.authChannels[chatID] = newUpdatesChan
 	authConsumer := NewAuth(h.bot, newUpdatesChan, h.validator, h.auth, h.reporter, finishChan, h.tgNameDailyReporterBot, h.tgNameMonthlyReporterBot)
-	newCtx, _ := context.WithCancel(ctx)
-	go authConsumer.Consume(newCtx)
+	go authConsumer.Consume(ctx)
 	return newUpdatesChan, finishChan
 }
 
@@ -134,7 +133,7 @@ func (h *Hub) listenFinish(ctx context.Context, finishChan chan *finishData) {
 	case <-ctx.Done():
 		return
 	case data := <-finishChan:
-		logrus.Infof("hub received message in finish chat with chat id %d", data.chatID)
+		logrus.Debugf("hub received message in finish chat with chat id %d", data.chatID)
 		delete(h.authChannels, data.chatID)
 		financeChan := make(chan tgbotapi.Update)
 		h.financeChannels[data.chatID] = financeChan
@@ -143,7 +142,7 @@ func (h *Hub) listenFinish(ctx context.Context, finishChan chan *finishData) {
 			TGUsername: data.tgUsername,
 			Username:   data.username,
 		}
-		logrus.Infof("goroutine in hub for user %s stopped", data.username)
+		logrus.Debugf("goroutine in hub for user %s stopped", data.username)
 	}
 }
 

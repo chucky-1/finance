@@ -95,12 +95,16 @@ func (a *Auth) Consume(ctx context.Context) {
 
 		case update := <-a.updatesChan:
 			if !update.Message.IsCommand() && update.Message.MessageID == a.waitRegisterMessageWithUsername {
-				if err := a.handleUsername(register, update.Message); err != nil {
+				success, err := a.handleUsername(register, update.Message)
+				if err != nil {
 					logrus.Errorf("register error: %v", err)
 					continue
 				}
+				if !success {
+					continue
+				}
 
-				if err := a.requestForCountry(update.Message); err != nil {
+				if err = a.requestForCountry(update.Message); err != nil {
 					logrus.Errorf("register error: %v", err)
 					continue
 				}
@@ -121,13 +125,17 @@ func (a *Auth) Consume(ctx context.Context) {
 			}
 
 			if !update.Message.IsCommand() && update.Message.MessageID == a.waitRegisterMessageWithPassword {
-				if err := a.handlePassword(register, update.Message); err != nil {
+				success, err := a.handlePassword(register, update.Message)
+				if err != nil {
 					logrus.Errorf("register error: %v", err)
+					continue
+				}
+				if !success {
 					continue
 				}
 
 				newCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-				err := a.auth.Register(newCtx, &model.User{
+				err = a.auth.Register(newCtx, &model.User{
 					Username: a.username,
 					Password: a.password,
 					Country:  a.country,
@@ -138,7 +146,7 @@ func (a *Auth) Consume(ctx context.Context) {
 					cancel()
 					continue
 				} else if err == repository.DuplicateUserErr {
-					logrus.Errorf("register error: user with username: %s already exist", a.username)
+					logrus.Debugf("user %s already exist", a.username)
 					if err = a.requestForUsername(register, update.Message,
 						fmt.Sprintf("Имя пользователя: %s уже существует. Попробуйте ещё раз! Введите ваше имя пользователя", a.username)); err != nil {
 						logrus.Errorf("register error: %v", err)
@@ -165,8 +173,8 @@ func (a *Auth) Consume(ctx context.Context) {
 					logrus.Errorf("register error: coldn't send explanation comminicate message: %v", err)
 				}
 
-				logrus.Infof("user %s successful registered", a.username)
-				logrus.Infof("auth consumer for user %s stopped", a.username)
+				logrus.Debugf("user %s successful registered", a.username)
+				logrus.Debugf("auth consumer for user %s stopped", a.username)
 				a.finish <- &finishData{
 					username:   a.username,
 					chatID:     update.Message.Chat.ID,
@@ -176,10 +184,15 @@ func (a *Auth) Consume(ctx context.Context) {
 			}
 
 			if !update.Message.IsCommand() && update.Message.MessageID == a.waitLoginMessageWithUsername {
-				if err := a.handleUsername(login, update.Message); err != nil {
+				success, err := a.handleUsername(login, update.Message)
+				if err != nil {
 					logrus.Errorf("login error: %v", err)
 					continue
 				}
+				if !success {
+					continue
+				}
+
 				if err := a.requestForPassword(login, update.Message, "Введите пароль"); err != nil {
 					logrus.Errorf("login error: %v", err)
 					continue
@@ -188,8 +201,12 @@ func (a *Auth) Consume(ctx context.Context) {
 			}
 
 			if !update.Message.IsCommand() && update.Message.MessageID == a.waitLoginMessageWithPassword {
-				if err := a.handlePassword(login, update.Message); err != nil {
+				success, err := a.handlePassword(login, update.Message)
+				if err != nil {
 					logrus.Errorf("login error: %v", err)
+					continue
+				}
+				if !success {
 					continue
 				}
 
@@ -200,6 +217,7 @@ func (a *Auth) Consume(ctx context.Context) {
 					cancel()
 					continue
 				} else if err == service.UserNotFoundErr {
+					logrus.Debugf("user %s already exists", a.username)
 					if err = a.requestForUsername(login, update.Message, "Пользователь с таким именем не найден. Попробуйте ещё раз! Введите имя пользователя"); err != nil {
 						logrus.Errorf("login error: %v", err)
 						cancel()
@@ -208,6 +226,7 @@ func (a *Auth) Consume(ctx context.Context) {
 					cancel()
 					continue
 				} else if err == service.WrongPasswordErr {
+					logrus.Debugf("user %s entered the wrong password %s", a.username, a.password)
 					if err = a.requestForUsername(login, update.Message, "Вы ввели неверное имя пользователя или пароль. Попробуйте ещё раз! Введите ваше имя пользователя"); err != nil {
 						logrus.Errorf("login error: %v", err)
 						cancel()
@@ -233,8 +252,8 @@ func (a *Auth) Consume(ctx context.Context) {
 					logrus.Errorf("login error: coldn't send explanation communicate message: %v", err)
 				}
 
-				logrus.Infof("user %s is authorized", a.username)
-				logrus.Infof("auth consumer for user %s stopped", a.username)
+				logrus.Debug("user %s is authorized", a.username)
+				logrus.Debug("auth consumer for user %s stopped", a.username)
 				a.finish <- &finishData{
 					username:   a.username,
 					chatID:     update.Message.Chat.ID,
@@ -246,7 +265,7 @@ func (a *Auth) Consume(ctx context.Context) {
 			if update.Message.IsCommand() {
 				switch update.Message.Command() {
 				case register:
-					logrus.Info("register command started executing")
+					logrus.Debug("register command started executing")
 					if err := a.requestForUsername(register, update.Message,
 						fmt.Sprintf("Введите имя пользователя. Минимум %d, максимум %d символов", usernameMinLength, usernameMaxLength)); err != nil {
 						logrus.Errorf("register error: %v", err)
@@ -254,7 +273,7 @@ func (a *Auth) Consume(ctx context.Context) {
 					}
 					continue
 				case login:
-					logrus.Info("login command started executing")
+					logrus.Debug("login command started executing")
 					if err := a.requestForUsername(login, update.Message, "Введите имя пользователя"); err != nil {
 						logrus.Errorf("login error: %v", err)
 						continue
@@ -266,30 +285,32 @@ func (a *Auth) Consume(ctx context.Context) {
 	}
 }
 
-func (a *Auth) handleUsername(action string, message *tgbotapi.Message) error {
+func (a *Auth) handleUsername(action string, message *tgbotapi.Message) (bool, error) {
 	a.username = message.Text
 	if !a.validate(a.username, fmt.Sprintf("min=%d,max=%d", usernameMinLength, usernameMaxLength)) {
 		err := a.requestForUsername(action, message, "Вы ввели некорректное имя пользователя. Попробуйте ещё раз!")
 		if err != nil {
-			return err
+			return false, err
 		}
-		return fmt.Errorf("user entered the wrong username: %s", a.username)
+		logrus.Debugf("%s, user entered the wrong username: %s", action, a.username)
+		return false, nil
 	}
-	logrus.Infof("%s, user entered username: %s", action, a.username)
-	return nil
+	logrus.Debugf("%s, user entered username: %s", action, a.username)
+	return true, nil
 }
 
-func (a *Auth) handlePassword(action string, message *tgbotapi.Message) error {
+func (a *Auth) handlePassword(action string, message *tgbotapi.Message) (bool, error) {
 	a.password = message.Text
 	if !a.validate(a.password, fmt.Sprintf("max=%d", passwordMaxLength)) {
 		err := a.requestForPassword(action, message, fmt.Sprintf("%s, вы ввели некорректный пароль. Попробуйте ещё раз!", a.username))
 		if err != nil {
-			return err
+			return false, err
 		}
-		return fmt.Errorf("user %s entered the wrong password: %s", a.username, a.password)
+		logrus.Debugf("%s, user %s entered the wrong password: %s", action, a.username, a.password)
+		return false, nil
 	}
-	logrus.Infof("%s, user %s entered password: %s", action, a.username, a.password)
-	return nil
+	logrus.Debugf("%s, user %s entered password: %s", action, a.username, a.password)
+	return true, nil
 }
 
 func (a *Auth) handleCountry(message *tgbotapi.Message) error {
@@ -303,7 +324,7 @@ func (a *Auth) handleCountry(message *tgbotapi.Message) error {
 	hour := int(timezone)
 	minute := int((timezone - float64(int(timezone))) * 100)
 	a.timezone = time.Duration(hour)*time.Hour + time.Duration(minute)*time.Minute
-	logrus.Infof("%s chose country: %s and timezone: %v", a.username, a.country, a.timezone)
+	logrus.Debugf("%s chose country: %s and timezone: %v", a.username, a.country, a.timezone)
 	return nil
 }
 

@@ -94,7 +94,7 @@ func (m *Mongo) GetByUsernames(ctx context.Context, usernames []string, kind, pe
 		}
 		user, ok := data.Map()["user"]
 		if !ok {
-			logrus.Infof("GetByUsernames method: user didn't find in map: %v", data.Map())
+			logrus.Errorf("GetByUsernames method: user didn't find in map: %v", data.Map())
 			continue
 		}
 

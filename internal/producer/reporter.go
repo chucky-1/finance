@@ -68,26 +68,26 @@ func (r *Reporter) waitSubscribers(ctx context.Context) {
 			logrus.Infof("reporter producer stopped wait subscribers: %v", ctx.Err())
 			return
 		case tgUser := <-r.tgUsersChan:
-			logrus.Infof("reporter producer received message to wait for the user's subscriptions: %v", tgUser)
+			logrus.Debugf("reporter producer received message to wait for the user's subscriptions: %v", tgUser)
 			r.expectedUsersToSubscribe[tgUser.TGUsername] = tgUser.Username
 		case update := <-r.dailySubscription:
-			logrus.Infof("reporter producer received message in dailySubscription from %s", update.SentFrom().UserName)
+			logrus.Debugf("reporter producer received message in dailySubscription from %s", update.SentFrom().UserName)
 			username, ok := r.expectedUsersToSubscribe[update.SentFrom().UserName]
 			if !ok {
 				logrus.Infof("reporter producer received message in dailySubscription from unknown user: %s", update.SentFrom().UserName)
 				continue
 			}
 			r.dailyChatsByUser[username] = update.Message.Chat.ID
-			logrus.Infof("%s subscribed to daily reports", username)
+			logrus.Debugf("%s subscribed to daily reports", username)
 		case update := <-r.monthlySubscription:
-			logrus.Infof("reporter producer received message in monthlyUpdatesChan from %s", update.SentFrom().UserName)
+			logrus.Debugf("reporter producer received message in monthlyUpdatesChan from %s", update.SentFrom().UserName)
 			username, ok := r.expectedUsersToSubscribe[update.SentFrom().UserName]
 			if !ok {
 				logrus.Infof("reporter producer received message in monthlyUpdatesChan from unknown user: %s", update.SentFrom().UserName)
 				continue
 			}
 			r.monthlyChatsByUser[username] = update.Message.Chat.ID
-			logrus.Infof("%s subscribed to monthly reports", username)
+			logrus.Debugf("%s subscribed to monthly reports", username)
 		}
 	}
 }
@@ -156,12 +156,14 @@ func (r *Reporter) sendReport(user, report, period string) error {
 	case dayPeriod:
 		chatID, ok = r.dailyChatsByUser[user]
 		if !ok {
-			return fmt.Errorf("couldn't send a report because don't have a chat with user, user didn't subscribe on daily reports: %s", user)
+			logrus.Debugf("couldn't send a report because don't have a chat with user, user didn't subscribe on daily reports: %s", user)
+			return nil
 		}
 	case monthPeriod:
 		chatID, ok = r.monthlyChatsByUser[user]
 		if !ok {
-			return fmt.Errorf("couldn't send a report because don't have a chat with user, user didn't subscribe on monthly reports: %s", user)
+			logrus.Debugf("couldn't send a report because don't have a chat with user, user didn't subscribe on monthly reports: %s", user)
+			return nil
 		}
 	}
 
