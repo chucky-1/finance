@@ -29,17 +29,17 @@ func NewFinance(bot *tgbotapi.BotAPI, username string, updatesChan chan tgbotapi
 }
 
 func (f *Finance) Consume(ctx context.Context) {
-	logrus.Info("finance consumer started")
+	logrus.Debugf("finance consumer started")
 	for {
 		select {
 		case <-ctx.Done():
-			logrus.Infof("finance consumer stopped: %v", ctx.Err())
+			logrus.Debugf("finance consumer stopped: %v", ctx.Err())
 			return
 		case update := <-f.updatesChan:
-			logrus.Infof("received message in finance consumer from username: %s", f.username)
+			logrus.Debugf("received message in finance consumer from username: %s", f.username)
 			args := strings.Split(update.Message.Text, " ")
 			if len(args) != 2 {
-				logrus.Errorf("finance consumer received invalid message: %s", update.Message.Text)
+				logrus.Debugf("finance consumer received invalid message: %s", update.Message.Text)
 				err := f.sendMessage(update.Message, fmt.Sprintf("%s, мы не можем обработать ваш запрос. Вы должны ввести только 2 параметра разделённых пробелом: статью расходов и сумму", f.username))
 				if err != nil {
 					logrus.Errorf("finance consumer send message error: %v", err)
@@ -50,7 +50,7 @@ func (f *Finance) Consume(ctx context.Context) {
 
 			sum, err := strconv.ParseFloat(args[1], 64)
 			if err != nil {
-				logrus.Errorf("finance consumer couldn't parseFloat: %v", err)
+				logrus.Debugf("finance consumer couldn't parseFloat: %v", err)
 				err = f.sendMessage(update.Message, fmt.Sprintf("%s, второй параметр должен быть числом", f.username))
 				if err != nil {
 					logrus.Errorf("finance consumer send message error: %v", err)
@@ -82,7 +82,7 @@ func (f *Finance) Consume(ctx context.Context) {
 				continue
 			}
 
-			logrus.Infof("%s added expenses: %s: %.2f", f.username, args[0], sum)
+			logrus.Debugf("%s added expenses: %s: %.2f", f.username, args[0], sum)
 		}
 	}
 }

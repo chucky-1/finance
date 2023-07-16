@@ -25,8 +25,6 @@ import (
 )
 
 func main() {
-	//logrus.SetFormatter(new(logrus.JSONFormatter))
-
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -38,6 +36,8 @@ func main() {
 	if err := env.Parse(&cfg); err != nil {
 		logrus.Fatalf("%+v\n", err)
 	}
+
+	logrus.SetLevel(logrus.Level(cfg.LogLevel))
 
 	conn, err := pgxpool.Connect(ctx, cfg.PostgresEndpoint)
 	if err != nil {

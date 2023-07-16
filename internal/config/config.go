@@ -1,6 +1,7 @@
 package config
 
 type Config struct {
+	LogLevel                  int    `env:"LOG_LEVEL"`
 	TGMainBotToken            string `env:"TG_MAIN_BOT_TOKEN"`
 	TGMainTimeout             int    `env:"TG_MAIN_TIMEOUT"`
 	TGNameDailyReporterBot    string `env:"TG_NAME_DAILY_REPORTER_BOT"`
